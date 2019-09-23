@@ -156,7 +156,7 @@ void CheckECalCalibration(char const* data_file, TCut cuts, bool verbose=false, 
   // link between position and MPV from file to check that everything is done consistently:
   // MPV from fit is divided from the value written in the file (1 is expected as result)
   std::map<int, double> xy_MPV;
-  std::ifstream constfile("/home/pipernog/padme-fw/PadmeReco/config/Calibration/ECalCalibConst.txt");
+  std::ifstream constfile("../../padme-fw/PadmeReco/config/Calibration/ECalCalibConst.txt");
   if(constfile.is_open()){
     int Px,Py,BN,CH;
     double mpv;
