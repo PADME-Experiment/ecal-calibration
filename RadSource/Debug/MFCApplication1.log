@@ -1,8 +1,0 @@
-﻿  MFCApplication1Dlg.cpp
-C:\Users\User\source\repos\MFCApplication2\MFCApplication1Dlg.cpp(491,8): warning C4101:  'inumber': variabile locale senza riferimenti
-C:\Users\User\source\repos\MFCApplication2\MFCApplication1Dlg.cpp(498,8): warning C4101:  'icall': variabile locale senza riferimenti
-C:\Users\User\source\repos\MFCApplication2\MFCApplication1Dlg.cpp(492,8): warning C4101:  'ix': variabile locale senza riferimenti
-C:\Users\User\source\repos\MFCApplication2\MFCApplication1Dlg.cpp(494,8): warning C4101:  'ipos': variabile locale senza riferimenti
-C:\Users\User\source\repos\MFCApplication2\MFCApplication1Dlg.cpp(493,8): warning C4101:  'iy': variabile locale senza riferimenti
-C:\Users\User\source\repos\MFCApplication2\MFCApplication1Dlg.cpp(497,11): warning C4101:  'hv': variabile locale senza riferimenti
-  MFCApplication1.vcxproj -> C:\Users\User\source\repos\MFCApplication2\Debug\MFCApplication_server.exe
