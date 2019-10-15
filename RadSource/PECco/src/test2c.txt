@@ -1,0 +1,33 @@
+# Mandatory fields
+SequenceName = TestSequence
+
+# the crystal size, in micron
+CrystalXSize = 21000
+CrystalYSize = 21000
+
+# These two parameters are the position of the "zero" of 
+# the stepper motors with respect to the corner of the crystal array
+# They are necessary to calculate the absolute positions 
+# to move the radioactive source to.
+# For the "center" of crystal pXpY:
+# Xabs = (pX-0.5)*crystalXSize - initialXoffset
+# Yabs = (pY-0.5)*crystalYSize - initialYoffset
+InitialXOffset = 0
+InitialYOffset = 0
+
+# Crystal configuration: CrystalXY
+# it's not necessary for all crystals to be configured, order does not matter
+
+# CrystalXY= crystalId, voltageSet 
+
+# the first crystal, this is a range between 550V and 700V
+Crystal00 = ID00 500-700
+Crystal01 = ID01 550-700
+
+
+#I cristalli sono mappati, nella direzione incidente del fascio, con 0,0 in basso a destra
+#ad incrementare fino a 4 verso sx e verso l'alto
+
+#i canali di HV sono mappati da 0 ed il canale 0 corrisponde al cristallo 0,0
+#il canale 24 corrisponde a 4,4
+

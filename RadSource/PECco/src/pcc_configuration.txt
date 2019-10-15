@@ -1,0 +1,52 @@
+# The address of the movement server
+MovementServer=192.168.0.52
+
+# The port for the server to listen to
+TCPPort=42424
+
+# Set this to true to avoid running stuff for real
+SimulationMode=False
+
+# The path where the DAQ stuff will be stored
+DAQConfigPath = /home/daq/PadmeCrystalCheck/data/
+
+# The HV controller executable
+HVexecutable = /home/daq/PCT_HV/PCT_HV
+
+# PadmeDAQ executable w/path
+PadmeDAQexecutable = /home/daq/Padme/PadmeDAQ/PadmeDAQ.exe
+
+# Level1DAQ executable w/path
+Level1DAQexecutable = /home/daq/Padme/Level1/PadmeLevel1.exe
+
+# AnalysisDAQ executable w/path
+AnalysisDAQexecutable = /home/daq/DigiDaq/ReadSourceSingleCh.exe
+
+# This forces the commands interacting with the HV to retry when
+# command fails to complete with a reasonable result
+HVSafeReadMode=True
+
+# This forces the HV system to check that the voltage transition
+# is complete to the nominal (Set) level before returning
+HVVSetSyncMode=True
+
+# This parameter, if different from 0, provides a timeout for the set voltage
+# operations. If the target voltage was not reached within <parameter value> 
+# seconds, the HVcontroller generates an error and the Sequencer skips
+# the upcoming DAQ run
+HVFailureTime=0
+
+# the crystal size, in micron
+CrystalXSize = 21150
+CrystalYSize = 21150
+
+# These two parameters are the position of the "zero" of
+# the stepper motors with respect to the corner of the crystal array
+# They are necessary to calculate the absolute positions
+# to move the radioactive source to.
+# For the "center" of crystal pXpY:
+# Xabs = (pX-0.5)*crystalXSize - initialXoffset
+# Yabs = (pY-0.5)*crystalYSize - initialYoffset
+InitialXOffset = 0
+InitialYOffset = 0
+

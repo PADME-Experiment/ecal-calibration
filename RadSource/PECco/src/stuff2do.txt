@@ -1,0 +1,41 @@
+General issues:
+- server configuration: finalize structure
+- client to communicate with server
+- client to find zero point for calibration
+- startup sequence: 
+    - issue command
+        - if server is not running, start it
+
+- startup & shutdown sequences  
+- cleanup a shit ton of debug messages
+
+- test full sequence:
+    - start server (directly and via client)
+    - check server configuration
+    - create zero positioning calibration
+    - load crystal test sequence
+    - run full test sequence 
+    - shutdown gracefully
+    - comm with server back and forth
+
+Inside server:
+- server has to read the zero point when it receives the configuration command
+- server has to be able to report where it's at
+- simulation mode to test everything. In sim mod instead of actually executing the command, the subsystem just sleeps for a few secs, before returning a success msg
+
+
+-- the positioning algorithm for the zero is less than ideal, as it requires the daq head 
+to be at the bottommost/rightmost position, so basically in the position (100000, 100000). 
+I don't have an actual command -> actually I do: setxy/X/Y ... so once the position is found
+I can simply issue /.../setxy/100000/100000 (or whatever number is correct)
+
+2.1cm * 5 + 50micron * 4
+
+
+21000 * 5 + 50 * 4 = 105000 + 200 micron /  ???? to verify with the final design. Anyway 
+the point is simply setting something within the actual range of the motors.
+real range: 21000 * 4 + 50 *  4 = 84000 + 200 => 84200 micron, 15800 micron ~> 1.58cm 
+
+
+-- maybe pccClient should only perform sync queries
+-- HVcontroller needs to perform sync queries, like the MoveController

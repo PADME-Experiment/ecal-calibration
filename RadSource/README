@@ -1,3 +1,7 @@
-This directory contains the code to calibrate ECal using a radioactive source.
+This directory contains the code implemented to calibrate ECal using a movable radioactive source.
+
 Coordinators for this subdir are Francesco Safai Tehrani <francesco.safaitehrani@roma1.infn.it> and Fabio Ferrarotto <fabio.ferrarotto@roma1.infn.it>
+
 Windows directory contains source code from windows S/W developed on Visuals Studio
+
+The PECco (Padme Electromagnetic Calorimeter calibration online) subdir contains the Python code for the client-server system implemented to perform the online calibration of the ECal. 

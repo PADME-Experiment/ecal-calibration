@@ -1,0 +1,27 @@
+executable              /home/daq/Padme/PadmeDAQ/PadmeDAQ.exe
+config_file             cfg/run_0/run_0_b00.cfg
+log_file                log/run_0/run_0_b00.log
+run_number              0
+board_id                0
+start_file              run/start
+quit_file               run/quit
+initok_file             run/initok_b00
+initfail_file           run/initfail_b00
+lock_file               run/lock_b00
+data_file               data/daq_b00
+total_daq_time          300 # => 5 mins
+startdaq_mode           0
+trigger_mode            1
+trigger_iolevel         NIM
+group_enable_mask       0xf
+channel_enable_mask     0x0000007f
+offset_global           0x6000
+post_trigger_size       75
+max_num_events_blt      128
+drs4corr_enable         1
+drs4_sampfreq           2
+daq_loop_delay          100000
+file_max_duration       60
+file_max_size           1073741824
+file_max_events         5000
+zero_suppression        0
