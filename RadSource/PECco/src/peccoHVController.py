@@ -1,4 +1,4 @@
-import pccBaseModule
+import peccoBaseModule
 import os
 import time
 
@@ -7,9 +7,9 @@ def HVchannel(position, *discard):
     pY, pX = [int(x) for x in position]
     return pY*5+pX
 
-class HVController(pccBaseModule.BaseModule):
+class HVController(peccoBaseModule.BaseModule):
     def __init__(self, logger, configuration):
-        pccBaseModule.BaseModule.__init__(self, logger, configuration)
+        peccoBaseModule.BaseModule.__init__(self, logger, configuration)
         self.name = "HVController"
         self.setupLoggerProxy()
 

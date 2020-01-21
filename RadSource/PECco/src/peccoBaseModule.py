@@ -19,6 +19,15 @@ class BaseModule(threading.Thread):
         self.name = "BaseModule"
         self.cmdDict = {}
         self.setupCmdDict()
+        self.moduleStatus = True
+        self.moduleErrorMessage = ""
+
+    # simple method to signal major problems with module
+    # returns a tuple containing True as first element
+    # if everything is ok, False + text message to signal
+    # problems. ONLY FOR MAJOR STUFF 
+    def checkStatus(self):
+        return (self.moduleStatus, self.moduleErrorMessage)
 
     def setupLoggerProxy(self):
         self.logger = peccoLogger.PadmeLoggerProxy(self.logger, self.name, level=True)

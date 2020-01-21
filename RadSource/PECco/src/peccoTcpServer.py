@@ -4,8 +4,8 @@ import socket
 import sys
 import time
 import tsdict
-import pccCommandCenter
-import pccLogger
+import peccoCommandCenter
+import peccoLogger
 
 if sys.version_info.major == 3:
     import queue as Queue
@@ -17,7 +17,7 @@ class TcpServer(asyncore.dispatcher):
         asyncore.dispatcher.__init__(self)
         self.config = configuration
         self.name = "TcpServer"
-        self.logger = pccLogger.PadmeLoggerProxy(logger, self.name, level=True)
+        self.logger = peccoLogger.PadmeLoggerProxy(logger, self.name, level=True)
         self.port = int(self.config["TCPPort"])
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         self.set_reuse_addr()
@@ -59,7 +59,7 @@ class TcpConnectionHandler(asyncore.dispatcher_with_send):
         self.logger.trace("Handler received data: ", data)
         if data:
             info = data.split()
-            cmd = pccCommandCenter.Command(info, answerQueue=self.answerQueue)
+            cmd = peccoCommandCenter.Command(info, answerQueue=self.answerQueue)
             self.commandQueue.put(cmd)
 
     def writable(self):

@@ -1,6 +1,6 @@
-import pccBaseModule
-import pccCommandCenter
-import pccDAQConfigFileMaker as dm
+import peccoBaseModule
+import peccoCommandCenter
+import peccoDAQConfigFileMaker as dm
 import copy
 import os
 import sys
@@ -11,51 +11,43 @@ if sys.version_info.major == 3:
 else:
     import Queue
 
-movementPattern = [
-    # Vidx, Row, Col1,Col2,..,.
-    (0, (0, (0, 1, 2, 3, 4))),
-    (0, (1, (4, 3, 2, 1, 0))),
-    (0, (2, (0, 1, 2, 3, 4))),
-    (0, (3, (4, 3, 2, 1, 0))),
-    (0, (4, (0, 1, 2, 3, 4))),
-    (1, (3, (4, 3, 2, 1, 0))),
-    (1, (4, (0, 1, 2, 3, 4))),
-    (1, (2, (4, 3, 2, 1, 0))),
-    (1, (1, (0, 1, 2, 3, 4))),
-    (1, (0, (4, 3, 2, 1, 0))),
-    (2, (1, (0, 1, 2, 3, 4))),
-    (2, (0, (4, 3, 2, 1, 0))),
-    (2, (2, (0, 1, 2, 3, 4))),
-    (2, (3, (4, 3, 2, 1, 0))),
-    (2, (4, (0, 1, 2, 3, 4))),
-    (3, (3, (4, 3, 2, 1, 0))),
-    (3, (4, (0, 1, 2, 3, 4))),
-    (3, (2, (4, 3, 2, 1, 0))),
-    (3, (1, (0, 1, 2, 3, 4))),
-    (3, (0, (4, 3, 2, 1, 0))),
-    (4, (1, (0, 1, 2, 3, 4))),
-    (4, (0, (4, 3, 2, 1, 0))),
-    (4, (2, (0, 1, 2, 3, 4))),
-    (4, (3, (4, 3, 2, 1, 0))),
-    (4, (4, (0, 1, 2, 3, 4)))
-]
-
-
-class Sequencer(pccBaseModule.BaseModule):
+class Sequencer(peccoBaseModule.BaseModule):
     def __init__(self, logger, configuration, sequenceConfigFile):
-        pccBaseModule.BaseModule.__init__(self, logger, configuration)
+        peccoBaseModule.BaseModule.__init__(self, logger, configuration)
         self.name = "Sequencer"
         self.setupLoggerProxy()
+        
+        # configuration items from general config
+        self.ecalStructureFile = self.config["EcalStructureFile"]
         self.sequenceConfigFile = sequenceConfigFile
+        
+        # format: SequenceName Xpos Ypos Voltage
+        self.lastCrystalDoneFile = "lastCrystalDone.txt"
+
+        # Load the full ECAL Map
+        self.readInECALMap()
+        
+        if not self.moduleStatus:
+            return 
 
         # Load the actual test setup
-        self.readInConfiguration()
+        self.readInSequence()
 
-        if not self.hasTestSetConfig:
+        if not self.hasSequenceConfig:
+            msg = "Missing sequence configuration file: %s"%self.sequenceConfigFile
+            self.logger.warn(msg)
+            self.moduleStatus = False
+            self.moduleErrorMessage = msg
             return
 
-        # Parse the test set configuration
-        self.testSetConfigParser()
+        # Parse the sequence into a map of crystals
+        self.sequenceConfigParser()
+        
+        # try to load the last known position to restart from there
+        self.loadLastCrystalDone()
+        
+        if not self.moduleStatus:
+            return
 
         # Setup the DAQ dir based on the available info
         self.setupDAQ()
@@ -102,61 +94,110 @@ class Sequencer(pccBaseModule.BaseModule):
         self.dataMutex.release_lock()
         return datum
         
-    def readInConfiguration(self):
-        self.hasTestSetConfig = False
+    def readInSequence(self):
+        self.hasSequenceConfig = False
         if not os.path.isfile(self.sequenceConfigFile):
             self.logger.warn("%s cannot read the configuration file: %s", self.name, self.sequenceConfigFile)
             return
 
-        df = open(self.sequenceConfigFile)
+        df = open(self.sequenceConfigFile) 
         myConfig = df.readlines()
         df.close()
-        
+
+        # strip comments and empty lines        
         myConfig2 = filter(lambda x: (x[0]!="#" and x.strip()!=''), myConfig)
-    
-        self.testSetConfig = dict(map(lambda y: (y[0].strip(), y[1].strip()), map(lambda x: x.strip().split("="), myConfig2)))
-        self.hasTestSetConfig = True
 
-        self.logger.debug(self.testSetConfig)
-
-        self.sequenceName = self.testSetConfig["SequenceName"]
-
-    def testSetConfigParser(self):
-        if not self.hasTestSetConfig:
-            self.logger.warn("%s cannot start sequence %s: no test set configuration available"%(self.name, self.sequenceName))
+        self.sequenceConfig = {}
+        self.sequenceName = (myConfig2[0].strip().split(" "))[1]
         
-        self.crystalMatrix = []
-        for x in range(5):
-            # the list neeeds to be formed correctly to then store the data....
-            self.crystalMatrix.append([])
-            for y in range(5):
-                self.crystalMatrix[x].append(("%d%d"%(x,y), "disabled", [0]))
+        for entry in myConfig2[1:]:
+            info = entry.strip().split(":")
+            if len(info) == 2:
+                self.sequenceConfig[info[0]] = info[1]
+            else: 
+                self.sequenceConfig[info[0]] = "default"    
 
-        for pX in range(5):
-            for pY in range(5):
-                CrystalID = "Crystal%d%d"%(pX,pY)
-                self.logger.debug(pX, pY, CrystalID)
-                if CrystalID in self.testSetConfig:
-                    self.logger.debug("found")
-                    datum = self.testSetConfig[CrystalID]
-                    crystalID, voltageSet = datum.split()
+        self.hasSequenceConfig = True
+        self.logger.debug(self.sequenceConfig)
 
-                    vs = voltageSet.split(":")
-                    if len(vs) != 5:
-                        vsmin, vsmax = [float(x) for x in voltageSet.split("-")]
-                        delta = (vsmax-vsmin)/4.
-                        vs = [vsmin, vsmin+delta, vsmin+2*delta, vsmin+3*delta, vsmax]
-                    else:
-                        vs = [float(x) for x in vs]
+    def readInECALMap(self):
+        self.ecalMap = {}
+        skipFirstLine = True
+        try:
+            with open(self.ecalStructureFile) as inFile:
+                # skip first line
+                _ = inFile.readline()
+                for entry in inFile:
+                    entry = entry.strip()
+                    info = entry.split(";")
+                    key = (int(info[1]), int(info[2]))
+                    values = [info[0]]
+                    values.extend(info[3:])
+                    self.ecalMap[key] = values
+        except FileNotFoundError as ff:
+            msg = "ECal crystal configuration file not found: %s"%ff
+            self.logger.warn(msg)
+            self.moduleStatus = False
+            self.moduleErrorMessage = msg
+        except Exception as exc:
+            msg = "Major problem in SequenceController: %s"%exc
+            self.logger.warn(msg)
+            self.moduleStatus = False
+            self.moduleErrorMessage = msg
 
-                    if len(vs) != 5:
-                        self.logger.error("There's something wrong with the configuration of crystal %s voltage points: %s."%(crystalID, vs))
-                        #return
 
-                    self.crystalMatrix[pX][pY] = ("%d%d"%(pX,pY), crystalID, vs)
+    def sequenceConfigParser(self):
+        self.sequenceMap = {}
+        
+        singleCrystal  = re.compile("^C\(\s*(\d+)\s*,\s*(\d+)\s*\)$")
+        xRangeCrystal  = re.compile("^C\(\s*(\d+)\s*-\s*(\d+)\s*,\s*(\d+)\s*\)$")
+        yRangeCrystal  = re.compile("^C\(\s*(\d+)\s*.\s*(\d+)\s*-\s*(\d+)\s*\)$")
+        xyRangeCrystal = re.compile("^C\(\s*(\d+)\s*-\s*(\d+)\s*,\s*(\d+)\s*-\s*(\d+)\s*\)\s*$")
+        
+        for (crystal,voltage) in self.sequenceConfig.items():
             
-        self.logger.debug("This is the crystal matrix: ", self.crystalMatrix)
+            # C(x,y)
+            mo = singleCrystal.match(crystal)
+            if mo:
+                cx,cy = mo.groups()
+                self.sequenceMap( (int(cx), int(cy)) ) = voltage
+                continue
+           
+            # C(x1-x2, y)
+            mo = xRangeCrystal.match(crystal)
+            if mo:
+                cx_min, cx_max ,cy = mo.groups()
+                for xC in range(cx_min,cx_max+1):
+                    self.sequenceMap(  (int(xC), int(cy)) ) = voltage
+                continue
+           
+            # C(x, y1-y2)
+            mo = yRangeCrystal.match(crystal)
+            if mo:
+                cx, cy_min, cy_max = mo.groups()
+                for yC in range(cy_min,cy_max+1):
+                    self.sequenceMap( (int(cx), int(yC)) ) = voltage
+                continue
 
+            # C(x1-x2, y1-y2)
+            mo = xyRangeCrystal.match(crystal)
+            if mo:
+                cx_min, cx_max, cy_min, cy_max = mo.groups()
+                for xC in range(cx_min,cx_max+1):
+                    for yC in range(cy_min,cy_max+1):
+                        self.sequenceMap( (int(xC), int(yC)) ) = voltage
+                continue
+               
+            # program should never get here. this is parsing error!
+            msg = "Crystal identifier format not recognized: %s"%crystal
+            self.logger.warn(msg)
+            self.moduleStatus = False
+            self.moduleErrorMessage = msg
+            return
+    
+    # this I will probably move within the actual running, lest
+    # I start creating hundreds of folders that might not get used...
+    # Also this has to be rewritten to work on the single crystal.        
     def setupDAQ(self):
         daqPath = "%s/%s"%(self.config["DAQConfigPath"], self.sequenceName)
         dm.mkDaqConfigDir(daqPath)
@@ -173,60 +214,101 @@ class Sequencer(pccBaseModule.BaseModule):
         self.config["DAQConfigFiles"] = daqConfigFiles
 
     def createSequence(self):
+        # regexes for voltage patterns:
+        
+        # match a number in the format x or x.y, positive or negative
+        pn = "\d+|\d+.\d*"
+        nn = "-\d+|-\d+.\d*"
+        
+        Vb = "^\s*V\s*\(\s*"
+        Ve = "\s*\)\s*$"
+        
+        # Value: V(voltageValue)
+        vValue = re.compile("%s(%s)%s"%(Vb, pn, Ve))
+        
+        # DeltaV: DeltaV(-deltaV1, deltaV2, #steps)
+        vDelta = re.compile("%sDeltaV\(\s*(%s)\s*,\s*(%s)\s*,\s*(\d+)\s*\)%s"%(Vb, nn, pn, Ve))
+        
+        # RangeV: RangeV( rangeBegin, rangeEnd, #steps )
+        vRange = re.compile("%sRangeV\(\s*(%s)\s*,\s*(%s)\s*,\s*(\d+)\s*\)%s"%(Vb, pn, pn, Ve))
 
-        dataPoints = []
-        for step in movementPattern:
-            vIdx = step[0]
-            row = step[1][0]
-            for col in step[1][1]:
-                dataPoints.append((vIdx, row, col, self.crystalMatrix[row][col][0], self.crystalMatrix[row][col][1], self.crystalMatrix[row][col][2]))
+        # SetV: V(SetV(V1, V2, ...))
+        vSet = re.compile("%s(SetV\(\s*(.*)\s*\)%s"%(Vb, Ve))
 
-        self.logger.debug("Always the crystal matrix: ", self.crystalMatrix)
-
-        self.crystalXsize = int(self.config["CrystalXSize"])
-        self.crystalYsize = int(self.config["CrystalYSize"])
-
-        # These two parameters are the position of the "zero" of 
-        # the stepper motors with respect to the corner of the crystal array
-        # They are necessary to calculate the absolute positions 
-        # to move the radioactive source to.
-        # For the "center" of crystal pXpY:
-        # Xabs = (pX-0.5)*crystalXSize - initialXoffset
-        # Yabs = (pY-0.5)*crystalYSize - initialYoffset
-        self.initialXoffset = int(self.config["InitialXOffset"])
-        self.initialYoffset = int(self.config["InitialYOffset"])
-
-        sequenceIndex = 0
         self.theSequence = []
         self.theSequence.append(("setHVtoSafe", 0))
         self.theSequence.append(("syncState", 0))
         self.theSequence.append(("turnOnChannels", 0))
         self.theSequence.append(("syncState", 0))
-        self.theSequence.append(("setHV", dataPoints[sequenceIndex]))
-        self.theSequence.append(("moveXY", (0,0)))
-        self.theSequence.append(("syncState", 0))
 
-        while sequenceIndex < len(dataPoints):
-            vIdx, pY, pX, position, crystalID, voltages = dataPoints[sequenceIndex]
-            #self.logger.debug("Loading steps for:", sequenceIndex, dataPoints[sequenceIndex])
-            if crystalID != "disabled" and voltages[vIdx] !=0.:
-                xAbs = int(pX * self.crystalXsize - self.initialXoffset)
-                yAbs = int(pY * self.crystalYsize - self.initialYoffset)
-                self.logger.debug("Working on crystal %s @ row=%d column=%d, voltage point #%d"%(crystalID, pY, pX, vIdx))
+        # crystals are "numbered" 0 <-> 28 in X, 0<->28 in Y 
+        xstart, xend, xstep = 28, -1, -1 
+        for theY in range(0, 29):
+            # move back and forth on the X axis => move right on line Y1, move left on line Y1+1 and so on
+            if xstart == 28:
+                xstart, xend, xstep = 0, 29, 1
+            else:
+                xstart, xend, xstep = 28, -1, -1 
+                 
+            for theX in range(xstart, xend, xstep):
+                theCrystal = (theX, theY)
+                crystalID = "X%02dY%02d"%(theX,theY)
+                
+                # the ecalMap is the ultimate authority as to where the crystal are
+                if theCrystal not in self.ecalMap:
+                    continue
+                
+                # extract the default information about the current crystal    
+                crystalData = self.ecalMap[theCrystal]
+                SlotHV, ChHV, SlotDAQ, ChDAQ, defaultHV = crystalData[1:6]
+                
+                # is the crystal in the loaded sequence?
+                if theCrystal not in self.sequenceMap:
+                    continue
 
-                self.logger.debug("setHV to %dV"%voltages[vIdx])
-                self.theSequence.append(("setHV", dataPoints[sequenceIndex]))
+                # move to the right position, the syncState relative to this is added
+                # with the HV control further below
+                self.logger.debug("moveXY to (%d,%d)"%(theX, theY))
+                self.theSequence.append(("moveXY", theCrystal))
+                
+                voltageList = []
+                
+                crystalVoltage = self.sequenceMap[theCrystal]
+                if crystalVoltage == "default":
+                    voltageList = [defaultHV]
+                    
+                mo = vValue.match(crystalVoltage)
+                if mo:
+                    voltage = float(mo.groups()[0])
+                    voltageList = [voltage]
 
-                self.logger.debug("moveXY to (%d,%d)"%(xAbs, yAbs))
-                self.theSequence.append(("moveXY", (xAbs, yAbs)))
+                mo = vDelta.match(crystalVoltage)
+                if mo:
+                    md, pd, steps = [float(x) for x in mo.groups()]
+                    delta = (pd-md)/steps
+                    for stp in range(int(steps+1)):
+                        voltageList.append(defaultHV+md+delta*stp)
 
-                self.theSequence.append(("syncState", 0))
+                mo = vRange.match(crystalVoltage)
+                if mo:
+                    vMin, vMax, steps = [float(x) for x in mo.groups()]
+                    delta = (vMax-vMin)/steps
+                    for stp in range(int(steps+1)):
+                        voltageList.append(vMin+stp*delta)
 
-                self.logger.debug("runDAQ")            
-                self.theSequence.append(("runDAQ", (self.sequenceName, position, crystalID)))
-                self.theSequence.append(("syncState",0))
+                mo = vRange.match(crystalVoltage)
+                if mo:
+                    voltageList = [float(x) for x in mo.groups()[0].split(",")]                    
 
-            sequenceIndex += 1
+                # once we moved to the right spot, stay and run the DAQ as many times as it's needed
+                for voltage in voltageList:
+                    self.logger.debug("Working on crystal %s @ Xpos=%d Ypos=%d, voltage point=%f"%(crystalID, theX, theY, voltage))
+                    self.theSequence.append(("setHV", (SlotHV, ChHV, voltage)))
+                    self.theSequence.append(("syncState", 0))
+                    
+                    self.logger.debug("runDAQ")    
+                    self.theSequence.append(("runDAQ", (self.sequenceName, theCrystal, SlotDAQ, ChDAQ, crystalID)))
+                    self.theSequence.append(("syncState",0))
 
         self.theSequence.append(("turnOffChannels", 0))
         self.theSequence.append(("syncState", 0))
@@ -249,8 +331,6 @@ class Sequencer(pccBaseModule.BaseModule):
         self.theSequenceStored = theSequence2
         self.theSequence = copy.copy(self.theSequenceStored)
 
-            #for entry in self.theSequence:
-            #    self.logger.debug(entry)
 
     def startFrom(self, vIdx, px, py):
         self.logger.debug("Sequencer trying to start from: %d @ %d,%d"%(vIdx, px, py))
@@ -282,7 +362,7 @@ class Sequencer(pccBaseModule.BaseModule):
         tokenDict = {}
         msgTokenId = 65536 # base value for tokenID
 
-        if not self.hasTestSetConfig:
+        if not self.hasSequenceConfig:
             self.logger.warn("The sequencer cannot run due to a configuration problem (no sequence loaded).")
             return "The sequencer cannot run due to a configuration problem."
 
@@ -325,7 +405,7 @@ class Sequencer(pccBaseModule.BaseModule):
                     self.logger.debug("tokenDict: ", tokenDict.values())
                     self.logger.debug("Got this back: ", cmd.command(), cmd.tokenId(), cmd.args())
                     retTokenId = int(cmd.tokenId())
-                    if tokenDict.has_key(retTokenId):
+                    if retTokenId in tokenDict:
                         self.logger.debug(retTokenId, "is in ", tokenDict.keys())
                         self.logger.debug(retTokenId, "is in ", tokenDict.values())
                         del(tokenDict[retTokenId])
@@ -351,38 +431,39 @@ class Sequencer(pccBaseModule.BaseModule):
     def resetXY(self, theTokenId, args):
         self.logger.debug("here I would normally reset the position...")
         return "Done"
-        return pccCommandCenter.Command(("MoveController", "resetXY"), tokenId=theTokenId, answerQueue=self.inputQueue)
+        return peccoCommandCenter.Command(("MoveController", "resetXY"), tokenId=theTokenId, answerQueue=self.inputQueue)
 
     def moveXY(self, theTokenId, args):
-        return pccCommandCenter.Command(("MoveController", "move_xy", args[0], args[1]), tokenId=theTokenId, answerQueue=self.inputQueue)
+        return peccoCommandCenter.Command(("MoveController", "move_xy", args[0], args[1]), tokenId=theTokenId, answerQueue=self.inputQueue)
 
     def setHV(self, theTokenId, args):
         self.HVControllerTokenID = theTokenId
-        return pccCommandCenter.Command(("HVController", "setHV", args), tokenId=theTokenId, answerQueue=self.inputQueue)
+        # SlotHV, ChHV, voltage
+        return peccoCommandCenter.Command(("HVController", "setHV", args[0], args[1], args[2]), tokenId=theTokenId, answerQueue=self.inputQueue)
         
     def runDAQ(self, theTokenId, args):
         self.logger.debug("runDAQ: ", args) # sequenceName, position, crystalID
-        return pccCommandCenter.Command(("RCController", "runDAQ", args[0], args[1], args[2]), tokenId=theTokenId, answerQueue=self.inputQueue)
+        return peccoCommandCenter.Command(("RCController", "runDAQ", args[0], args[1], args[2]), tokenId=theTokenId, answerQueue=self.inputQueue)
 
         self.logger.debug("runDAQ: ", args) # sequenceName, position, crystalID
-        return pccCommandCenter.Command(("RCController", "runDAQ", args[0], args[1], args[2]), tokenId=theTokenId, answerQueue=self.inputQueue)
+        return peccoCommandCenter.Command(("RCController", "runDAQ", args[0], args[1], args[2]), tokenId=theTokenId, answerQueue=self.inputQueue)
 
     def setHVtoSafe(self, theTokenId, args):
         self.logger.debug("Setting all Vset to safe value (0V)")
-        return pccCommandCenter.Command(("HVController", "setHVtoSafe", args), tokenId=theTokenId, answerQueue=self.inputQueue)
+        return peccoCommandCenter.Command(("HVController", "setHVtoSafe", args), tokenId=theTokenId, answerQueue=self.inputQueue)
 
     def turnOnChannels(self, theTokenId, args):
         self.logger.debug("Turning ON all HV channels")
-        return pccCommandCenter.Command(("HVController", "doAllChanOn", args), tokenId=theTokenId, answerQueue=self.inputQueue)
+        return peccoCommandCenter.Command(("HVController", "doAllChanOn", args), tokenId=theTokenId, answerQueue=self.inputQueue)
 
     def turnOffChannels(self, theTokenId, args):
         self.logger.debug("Turning OFF all HV channels")
-        return pccCommandCenter.Command(("HVController", "doAllChanOff", args), tokenId=theTokenId, answerQueue=self.inputQueue)
+        return peccoCommandCenter.Command(("HVController", "doAllChanOff", args), tokenId=theTokenId, answerQueue=self.inputQueue)
 
 
-class SequencerController(pccBaseModule.BaseModule):
+class SequencerController(peccoBaseModule.BaseModule):
     def __init__(self, logger, configuration):
-        pccBaseModule.BaseModule.__init__(self, logger, configuration)
+        peccoBaseModule.BaseModule.__init__(self, logger, configuration)
         self.name = "SequencerController"
         self.setupLoggerProxy()
         self.theSequencer = None

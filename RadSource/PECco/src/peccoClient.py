@@ -15,7 +15,7 @@ if sys.version_info.major == 3:
 else:
     import Queue
 
-class pccClient(asyncore.dispatcher):
+class peccoClient(asyncore.dispatcher):
     def __init__(self, address, port):
         asyncore.dispatcher.__init__(self)
         self.address = address
@@ -70,12 +70,12 @@ class muThread(threading.Thread):
 
 
 class CmdLine(cmd.Cmd):
-    """Command line processor for pccClient."""
+    """Command line processor for peccoClient."""
     def __init__(self, communicationQueue, clientThread):
         cmd.Cmd.__init__(self)
         self.communicationQueue = communicationQueue
         self.clientThread = clientThread
-        self.prompt = "[pccShell]% "
+        self.prompt = "[peccoShell]% "
 
     def do_exit(self, line):
         clientThread.exit()
@@ -127,7 +127,7 @@ if __name__ == '__main__':
     goOn = True
 
     # THIS HAS TO READ THE CONFIGURATION!!!!!
-    client = pccClient("127.0.0.1", 42424)
+    client = peccoClient("127.0.0.1", 42424)
     clientThread = muThread()
     clientThread.start()
     CmdLine(client.communicationQueue, clientThread).cmdloop()

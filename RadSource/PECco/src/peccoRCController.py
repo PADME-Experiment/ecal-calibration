@@ -1,10 +1,10 @@
-import pccBaseModule
-import pccCommandCenter
-import pccProcessingPipeline as pccPP
+import peccoBaseModule
+import peccoCommandCenter
+import peccoProcessingPipeline as peccoPP
 
-class RCController(pccBaseModule.BaseModule):
+class RCController(peccoBaseModule.BaseModule):
     def __init__(self, logger, configuration):
-        pccBaseModule.BaseModule.__init__(self, logger, configuration)
+        peccoBaseModule.BaseModule.__init__(self, logger, configuration)
         self.name = "RCController"
         self.nakedLogger = logger
         self.setupLoggerProxy()
@@ -19,11 +19,11 @@ class RCController(pccBaseModule.BaseModule):
         if sequenceName in self.ppDict:
             return self.ppDict[sequenceName]
 
-        pp = pccPP.ProcessingPipeline(sequenceName)
+        pp = peccoPP.ProcessingPipeline(sequenceName)
 
-        pps1 = pccPP.DAQProcess(self.nakedLogger, self.config, sequenceName, daqWorkDir)
-        pps2 = pccPP.LVL1Process(self.nakedLogger, self.config, daqWorkDir)
-        pps3 = pccPP.AnalysisProcess(self.nakedLogger, self.config, daqWorkDir)
+        pps1 = peccoPP.DAQProcess(self.nakedLogger, self.config, sequenceName, daqWorkDir)
+        pps2 = peccoPP.LVL1Process(self.nakedLogger, self.config, daqWorkDir)
+        pps3 = peccoPP.AnalysisProcess(self.nakedLogger, self.config, daqWorkDir)
 
         pps1.setCommandQueue(self.commandQueue)
         pps2.setCommandQueue(self.commandQueue)

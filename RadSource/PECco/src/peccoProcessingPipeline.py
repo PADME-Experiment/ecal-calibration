@@ -1,9 +1,9 @@
 from __future__ import print_function
 import copy
 import os
-import pccBaseModule
-import pccCommandCenter
-import pccLogger
+import peccoBaseModule
+import peccoCommandCenter
+import peccoLogger
 import shlex
 import subprocess
 import sys
@@ -20,9 +20,9 @@ else:
     this class can be instantiated direcly if the default behavior is okay
     or specialized, modifying the processing steps (preExec, executeCommand, postExec)
     """
-class PipelineProcess(pccBaseModule.BaseModule):
+class PipelineProcess(peccoBaseModule.BaseModule):
     def __init__(self, logger, config, tName, command):
-        pccBaseModule.BaseModule.__init__(self, logger, config)
+        peccoBaseModule.BaseModule.__init__(self, logger, config)
         self.command = command
         self.dataQueue = Queue.Queue()
         self.syncQueue = Queue.Queue()
@@ -30,7 +30,7 @@ class PipelineProcess(pccBaseModule.BaseModule):
         self.nextStep = []
         self.name = tName
         self.sync = 0
-        self.logger = pccLogger.PadmeLoggerProxy(logger, self.name, level=True)
+        self.logger = peccoLogger.PadmeLoggerProxy(logger, self.name, level=True)
         self.setCWD()
         self.setLogfiles()
         self.start()

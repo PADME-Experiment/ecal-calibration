@@ -3,15 +3,26 @@ import httplib
 import socket
 import time
 
-class MoveController(peccoBaseModule.BaseModule):
+# this version of the MoveController deals with the motor
+# system engineered for online calibration within the experiment
+
+class ExpMoveController(peccoBaseModule.BaseModule):
     def __init__(self, logger, configuration):
         peccoBaseModule.BaseModule.__init__(self, logger, configuration)
-        self.name = "MoveController"
+        self.name = "ExpMoveController"
         self.setupLoggerProxy()
-        self.arduinoAddress = self.config["MovementServer"]
+        self.remoteMoveAddress = self.config["ExpMovementServer"]
+        self.remoteMovePort    = self.config["ExpMovementPort"]
         self.currentX = 0
         self.currentY = 0
         self.mcOffline = True   
+        # read in the data file and prepare the crystal dictionary
+        self.readInData()
+        
+        # setup TCP connection with movement server
+        self.connectToServer()
+        
+
         data = self.read_position()
         self.logger.trace("%s"%" ".join([str(x).strip() for x in data]))
         if not self.mcOffline:
@@ -32,7 +43,26 @@ class MoveController(peccoBaseModule.BaseModule):
         self.cmdDict["resetXY"]       = self.resetXY
         self.cmdDict["set_xrel"]      = self.set_xrel
         self.cmdDict["set_yrel"]      = self.set_yrel
+            
+    def connectToServer(self):
+        self.serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
+        try:
+            self.serverSocket.connect((self.remoteMoveAddress, self.remoteMovePort))
+        except ConnectionRefused as ss:
+            msg = "ExpMovement Server refused connection: %s"%ss
+            self.logger.want(msg)
+            self.moduleStatus = False
+            self.moduleErrorMessage = msg
+        except Exception as exc:
+            msg = "Major problem in ExpMoveController: %s"%exc
+            self.logger.warn(msg)
+            self.moduleStatus = False
+            self.moduleErrorMessage = msg
+    
+    def writeReadTcp(self, msg):
+    
+        
     def httpGet(self, *getData):
         gd = "/".join(getData)
         self.logger.debug(gd)
@@ -70,6 +100,7 @@ class MoveController(peccoBaseModule.BaseModule):
     
     # read the current position from Arduino and the one stored in the class
     def read_position(self):
+        
         info = self.httpGet("leggi", "ok")
         return (info, (self.currentX, self.currentY))
 
