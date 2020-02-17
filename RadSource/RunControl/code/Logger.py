@@ -9,7 +9,7 @@ class Logger(object):
         # Get position of DAQ main directory from PADME_DAQ_DIR environment variable
         # Default to current dir if not set
         #self.daq_dir = os.getenv('PADME_DAQ_DIR',".")
-        self.daq_dir = "."
+        self.daq_dir = os.getenv('PADME_CALIB_DIR',".")
 
         self.log_file = self.daq_dir+"/log/CalibRunControl.log"
 

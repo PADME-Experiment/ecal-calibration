@@ -4,7 +4,7 @@ import time
 import shlex
 import subprocess
 
-from PadmeDB  import PadmeDB
+#from PadmeDB  import PadmeDB
 
 class ADCBoard:
 
@@ -14,12 +14,13 @@ class ADCBoard:
 
         # Get position of DAQ main directory from PADME_DAQ_DIR environment variable
         # Default to current dir if not set
-        self.daq_dir = os.getenv('PADME_DAQ_DIR',".")
+        #self.daq_dir = os.getenv('PADME_DAQ_DIR',".")
+        self.daq_dir = os.getenv('PADME_CALIB_DIR',".")
 
         # Define id file for passwordless ssh command execution
         self.ssh_id_file = "%s/.ssh/id_rsa_daq"%os.getenv('HOME',"~")
 
-        self.db = PadmeDB()
+        #self.db = PadmeDB()
 
         self.status = "idle"
 
@@ -344,36 +345,36 @@ class ADCBoard:
         print self.format_config_daq()
         print self.format_config_zsup()
 
-    def create_proc_daq(self):
+    #def create_proc_daq(self):
+    #
+    #    # Create DAQ process in DB
+    #    self.proc_daq_id = self.db.create_daq_process(self.run_number,self.node_id)
+    #    if self.proc_daq_id == -1:
+    #        print "ADCBoard::create_proc_daq - ERROR: unable to create new DAQ process in DB"
+    #        return "error"
+    #
+    #    # Add info about optical link
+    #    self.db.add_daq_process_optical_link(self.proc_daq_id,self.node_id,self.conet2_link,self.conet2_slot)
+    #
+    #    # Add all configuration parameters
+    #    for cfg in self.config_list_daq():
+    #        self.db.add_cfg_para_proc(self.proc_daq_id,cfg[0],cfg[1])
+    #
+    #    return "ok"
 
-        # Create DAQ process in DB
-        self.proc_daq_id = self.db.create_daq_process(self.run_number,self.node_id)
-        if self.proc_daq_id == -1:
-            print "ADCBoard::create_proc_daq - ERROR: unable to create new DAQ process in DB"
-            return "error"
-
-        # Add info about optical link
-        self.db.add_daq_process_optical_link(self.proc_daq_id,self.node_id,self.conet2_link,self.conet2_slot)
-
-        # Add all configuration parameters
-        for cfg in self.config_list_daq():
-            self.db.add_cfg_para_proc(self.proc_daq_id,cfg[0],cfg[1])
-
-        return "ok"
-
-    def create_proc_zsup(self):
-
-        # Create ZSUP process in DB
-        self.proc_zsup_id = self.db.create_zsup_process(self.run_number,self.node_id)
-        if self.proc_zsup_id == -1:
-            print "ADCBoard::create_proc_zsup - ERROR: unable to create new ZSUP proces in DB"
-            return "error"
-
-        # Add all configuration parameters
-        for cfg in self.config_list_zsup():
-            self.db.add_cfg_para_proc(self.proc_zsup_id,cfg[0],cfg[1])
-
-        return "ok"
+    #def create_proc_zsup(self):
+    #
+    #    # Create ZSUP process in DB
+    #    self.proc_zsup_id = self.db.create_zsup_process(self.run_number,self.node_id)
+    #    if self.proc_zsup_id == -1:
+    #        print "ADCBoard::create_proc_zsup - ERROR: unable to create new ZSUP proces in DB"
+    #        return "error"
+    #
+    #    # Add all configuration parameters
+    #    for cfg in self.config_list_zsup():
+    #        self.db.add_cfg_para_proc(self.proc_zsup_id,cfg[0],cfg[1])
+    #
+    #    return "ok"
 
     #def get_link_id(self):
     #
@@ -403,9 +404,9 @@ class ADCBoard:
             print "ADCBoard::start_daq - ERROR: Execution failed: %s",e
             return 0                
 
-        # Tag start of process in DB
-        if self.run_number:
-            self.db.set_process_time_create(self.proc_daq_id,self.db.now_str())
+        ## Tag start of process in DB
+        #if self.run_number:
+        #    self.db.set_process_time_create(self.proc_daq_id,self.db.now_str())
 
         # Return process id
         return self.process_daq.pid
@@ -418,8 +419,8 @@ class ADCBoard:
                 # Process exited: clean up defunct process and close log file
                 self.process_daq.wait()
                 self.log_handle_daq.close()
-                if self.run_number:
-                    self.db.set_process_time_end(self.proc_daq_id,self.db.now_str())
+                #if self.run_number:
+                #    self.db.set_process_time_end(self.proc_daq_id,self.db.now_str())
                 return True
             time.sleep(0.5)
 
@@ -441,8 +442,8 @@ class ADCBoard:
                 # Process exited: clean up defunct process and close log file
                 self.process_daq.wait()
                 self.log_handle_daq.close()
-                if self.run_number:
-                    self.db.set_process_time_end(self.proc_daq_id,self.db.now_str())
+                #if self.run_number:
+                #    self.db.set_process_time_end(self.proc_daq_id,self.db.now_str())
                 return True
             time.sleep(0.5)
 
@@ -453,7 +454,7 @@ class ADCBoard:
         if self.process_daq.poll() != None:
             self.process_daq.wait()
             self.log_handle_daq.close()
-        if self.run_number: self.db.set_process_time_end(self.proc_daq_id,self.db.now_str())
+        #if self.run_number: self.db.set_process_time_end(self.proc_daq_id,self.db.now_str())
         return False
 
     def start_zsup(self):
@@ -478,9 +479,9 @@ class ADCBoard:
             print "ADCBoard::start_zsup - ERROR: Execution failed: %s",e
             return 0                
 
-        # Tag start of process in DB
-        if self.run_number:
-            self.db.set_process_time_create(self.proc_zsup_id,self.db.now_str())
+        ## Tag start of process in DB
+        #if self.run_number:
+        #    self.db.set_process_time_create(self.proc_zsup_id,self.db.now_str())
 
         # Return process id
         return self.process_zsup.pid
@@ -495,8 +496,8 @@ class ADCBoard:
                 # Process exited: clean up defunct process and close log file
                 self.process_zsup.wait()
                 self.log_handle_zsup.close()
-                if self.run_number:
-                    self.db.set_process_time_end(self.proc_zsup_id,self.db.now_str())
+                #if self.run_number:
+                #    self.db.set_process_time_end(self.proc_zsup_id,self.db.now_str())
                 return True
             time.sleep(0.5)
 
@@ -507,28 +508,28 @@ class ADCBoard:
         if self.process_zsup.poll() != None:
             self.process_zsup.wait()
             self.log_handle_zsup.close()
-        if self.run_number:
-            self.db.set_process_time_end(self.proc_zsup_id,self.db.now_str())
+        #if self.run_number:
+        #    self.db.set_process_time_end(self.proc_zsup_id,self.db.now_str())
         return False
 
-    def parse_log_daq(self):
+    #def parse_log_daq(self):
+    #
+    #    # Look for DBINFO lines in log file and send them to DBINFO line processor
+    #    if os.path.exists(self.log_file_daq) and os.path.isfile(self.log_file_daq):
+    #        with open(self.log_file_daq,"r") as log:
+    #            for line in log:
+    #                if self.re_dbinfo_line.match(line):
+    #                    self.db.manage_dbinfo_entry(self.proc_daq_id,line)
+    #    else:
+    #        print "ADCBoard::parse_log_daq - WARNING: DAQ log file %s not found"%self.log_file_daq
 
-        # Look for DBINFO lines in log file and send them to DBINFO line processor
-        if os.path.exists(self.log_file_daq) and os.path.isfile(self.log_file_daq):
-            with open(self.log_file_daq,"r") as log:
-                for line in log:
-                    if self.re_dbinfo_line.match(line):
-                        self.db.manage_dbinfo_entry(self.proc_daq_id,line)
-        else:
-            print "ADCBoard::parse_log_daq - WARNING: DAQ log file %s not found"%self.log_file_daq
-
-    def parse_log_zsup(self):
-
-        # Look for DBINFO lines in log file and send them to DBINFO line processor
-        if os.path.exists(self.log_file_zsup) and os.path.isfile(self.log_file_zsup):
-            with open(self.log_file_zsup,"r") as log:
-                for line in log:
-                    if self.re_dbinfo_line.match(line):
-                        self.db.manage_dbinfo_entry(self.proc_zsup_id,line)
-        else:
-            print "ADCBoard::parse_log_zsup - WARNING: ZSUP log file %s not found"%self.log_file_zsup
+    #def parse_log_zsup(self):
+    #
+    #    # Look for DBINFO lines in log file and send them to DBINFO line processor
+    #    if os.path.exists(self.log_file_zsup) and os.path.isfile(self.log_file_zsup):
+    #        with open(self.log_file_zsup,"r") as log:
+    #            for line in log:
+    #                if self.re_dbinfo_line.match(line):
+    #                    self.db.manage_dbinfo_entry(self.proc_zsup_id,line)
+    #    else:
+    #        print "ADCBoard::parse_log_zsup - WARNING: ZSUP log file %s not found"%self.log_file_zsup

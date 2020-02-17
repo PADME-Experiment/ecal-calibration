@@ -8,12 +8,11 @@ from Level1   import Level1
 from Merger   import Merger
 from ADCBoard import ADCBoard
 from Trigger  import Trigger
-from PadmeDB  import PadmeDB
+#from PadmeDB  import PadmeDB
 
 class Run:
 
     def __init__(self):
-
 
         # Get account under which the RunControl runs
         self.user_account = os.getenv('USER',"daq")
@@ -21,7 +20,7 @@ class Run:
         # Get location of DAQ main directory from PADME_DAQ_DIR
         # Default to current dir if not set
         #self.daq_dir = os.getenv('PADME_DAQ_DIR',".")
-        self.daq_dir = "."
+        self.daq_dir = os.getenv('PADME_CALIB_DIR',".")
 
         # Get base port number for network tunnels from PADME_RC_TUNNEL_BASE_PORT
         self.base_port_number = int(os.getenv('PADME_RC_TUNNEL_BASE_PORT',"31400"))
@@ -59,8 +58,28 @@ class Run:
         self.initfail_file_head = self.control_dir+"/initfail"
         self.lock_file_head = self.control_dir+"/lock"
 
-        # Connect to database services
-        self.db = PadmeDB()
+        ## Connect to database services
+        #self.db = PadmeDB()
+
+        # Define map of nodes used by DAQ
+        self.node_id = {
+            "localhost": 0,
+            "l0padme4":  1,
+            "l0padme5":  2,
+            "l0padme1":  3,
+            "l0padme3":  4,
+            "l1padme1":  5,
+            "l1padme2":  6
+        }
+        self.node_ip = {
+            0: "127.0.0.1",
+            1: "192.168.60.3",
+            2: "192.168.60.4",
+            3: "192.168.60.2",
+            4: "192.168.60.7",
+            5: "192.168.60.5",
+            6: "192.168.60.6"
+        }
 
         # Do not define a default setup
         self.setup = ""
@@ -72,21 +91,22 @@ class Run:
 
     def change_run(self):
 
-        # Check if requested run number was not used before
-        # Saves the day if more than one RunControl program is running at the same time (DON'T DO THAT!!!)
-        if (self.run_number):
-            run_is_in_db = self.db.is_run_in_db(self.run_number)
-            if (run_is_in_db):
-                print "Run::change_run - ERROR - Run %d is already in the DB: cannot use it again"%self.run_number
-                print "Please check if someone else is using this RunControl before retrying"
-                #self.send_answer("error_init")
-                return False
+        ## Check if requested run number was not used before
+        ## Saves the day if more than one RunControl program is running at the same time (DON'T DO THAT!!!)
+        #if (self.run_number):
+        #    run_is_in_db = self.db.is_run_in_db(self.run_number)
+        #    if (run_is_in_db):
+        #        print "Run::change_run - ERROR - Run %d is already in the DB: cannot use it again"%self.run_number
+        #        print "Please check if someone else is using this RunControl before retrying"
+        #        #self.send_answer("error_init")
+        #        return False
 
         # Define run name using run number and start time
-        self.run_name = "run_%7.7d_%s"%(self.run_number,time.strftime("%Y%m%d_%H%M%S",time.gmtime()))
+        #self.run_name = "run_%7.7d_%s"%(self.run_number,time.strftime("%Y%m%d_%H%M%S",time.gmtime()))
+        self.run_name = "calib_%15.15s_%2.2d_%2.2d_%4.4dV"%(time.strftime("%Y%m%d_%H%M%S",time.gmtime()),self.calib_board,self.calib_channel,self.calib_hv)
 
-        # Write run name to current_run file for monitoring
-        with open(self.current_run_file,"w") as lf: lf.write("%s\n"%self.run_name)
+        ## Write run name to current_run file for monitoring
+        #with open(self.current_run_file,"w") as lf: lf.write("%s\n"%self.run_name)
 
         self.run_dir = self.daq_dir+"/runs/"+self.run_name
 
@@ -121,12 +141,12 @@ class Run:
         for level1 in self.level1_list:
             self.runconfig_level1(level1)
 
-        # If this is a real run, create it in the DB
-        if (self.run_number):
-            print "Creating Run %d structure in DB"%self.run_number
-            if self.create_run_in_db() == "error":
-                print "Run::change_run - ERROR - Cannot create Run in the DB"
-                return False
+        ## If this is a real run, create it in the DB
+        #if (self.run_number):
+        #    print "Creating Run %d structure in DB"%self.run_number
+        #    if self.create_run_in_db() == "error":
+        #        print "Run::change_run - ERROR - Cannot create Run in the DB"
+        #        return False
 
         return True
 
@@ -161,6 +181,10 @@ class Run:
 
         # Clean up Run configuration and set all run parameters to default
 
+        self.calib_board = 0
+        self.calib_channel = 0
+        self.calib_hv = 0
+
         self.adcboard_list = []
 
         self.trigger = None
@@ -171,8 +195,8 @@ class Run:
 
         self.run_number = 0
         self.run_name = "run_%7.7d_%s"%(self.run_number,time.strftime("%Y%m%d_%H%M%S",time.gmtime()))
-        self.run_type = "TEST"
-        self.run_user = "PADME crew"
+        self.run_type = "CALIBRATION"
+        self.run_user = "ECal Calibration"
         self.run_comment_start = "Generic start of run"
         self.run_comment_end = "Generic end of run"
 
@@ -630,7 +654,7 @@ class Run:
                 print command
                 os.system(command)
 
-    def change_setup(self,setup,board,channel):
+    def change_setup(self,setup):
 
         # Reset run configuration to its default values
         self.set_default_config()
@@ -648,9 +672,9 @@ class Run:
         #    self.adcboard_list.append(adcboard)
         #    self.daq_nodes_id_list.append(adcboard.node_id)
         # Only one board is actually needed
-        print "Run - Configuring ADC board %d"%b
-        adcboard = ADCBoard(board)
-        self.configure_adcboard(adcboard,channel)
+        print "Run - Configuring ADC board %d"%self.calib_board
+        adcboard = ADCBoard(self.calib_board)
+        self.configure_adcboard(adcboard,self.calib_channel)
         self.adcboard_list.append(adcboard)
         self.daq_nodes_id_list.append(adcboard.node_id)
 
@@ -660,7 +684,8 @@ class Run:
         # Store ip addresses of DAQ nodes in a dictionary
         self.daq_nodes_ip_list = {}
         for node_id in self.daq_nodes_id_list:
-            self.daq_nodes_ip_list[node_id] = self.db.get_node_daq_ip(node_id)
+            #self.daq_nodes_ip_list[node_id] = self.db.get_node_daq_ip(node_id)
+            self.daq_nodes_ip_list[node_id] = self.node_ip[node_id]
 
         # Create new Trigger process handler
         self.trigger = Trigger()
@@ -707,8 +732,10 @@ class Run:
         for link in self.board_link_list:
             (board,host,port,node) = link
             if (int(board) == adcboard.board_id):
-                adcboard.node_id = self.db.get_node_id(host)
-                adcboard.node_ip = self.db.get_node_daq_ip(adcboard.node_id)
+                #adcboard.node_id = self.db.get_node_id(host)
+                #adcboard.node_ip = self.db.get_node_daq_ip(adcboard.node_id)
+                adcboard.node_id = self.node_id[host]
+                adcboard.node_ip = self.node_ip[adcboard.node_id]
                 adcboard.conet2_link = int(port)
                 adcboard.conet2_slot = int(node)
 
@@ -746,8 +773,10 @@ class Run:
         trigger.initfail_file = "%s_trigger"%self.initfail_file_head
 
         # Set node where Trigger will run
-        trigger.node_id = self.db.get_node_id(self.trigger_node)
-        trigger.node_ip = self.db.get_node_daq_ip(trigger.node_id)
+        #trigger.node_id = self.db.get_node_id(self.trigger_node)
+        #trigger.node_ip = self.db.get_node_daq_ip(trigger.node_id)
+        trigger.node_id = self.node_id[self.trigger_node]
+        trigger.node_ip = self.node_ip[trigger.node_id]
 
         # Define trigger mask to use for this setup
         #trigger.trigger_mask = self.trigger_mask
@@ -819,8 +848,10 @@ class Run:
         merger.run_number = self.run_number
 
         # Get node_id and node_ip from DB
-        merger.node_id = self.db.get_node_id(self.merger_node)
-        merger.node_ip = self.db.get_node_daq_ip(merger.node_id)
+        #merger.node_id = self.db.get_node_id(self.merger_node)
+        #merger.node_ip = self.db.get_node_daq_ip(merger.node_id)
+        merger.node_id = self.node_id[self.merger_node]
+        merger.node_ip = self.node_ip[merger.node_id]
 
         merger.config_file = "%s/%s_merger.cfg"%(self.config_dir,self.config_file_head)
         merger.log_file    = "%s/%s_merger.log"%(self.log_dir,self.log_file_head)
@@ -834,8 +865,10 @@ class Run:
         level1.run_number = self.run_number
 
         # Get node_id and node_ip from DB using Merger node
-        level1.node_id = self.db.get_node_id(self.merger_node)
-        level1.node_ip = self.db.get_node_daq_ip(level1.node_id)
+        #level1.node_id = self.db.get_node_id(self.merger_node)
+        #level1.node_ip = self.db.get_node_daq_ip(level1.node_id)
+        level1.node_id = self.node_id[self.merger_node]
+        level1.node_ip = self.node_ip[level1.node_id]
 
         s_lid = "lvl1_%02d"%level1.level1_id
         level1.config_file = "%s/%s_%s.cfg"%(self.config_dir,self.config_file_head,s_lid)
@@ -869,10 +902,10 @@ class Run:
             print command
             os.system(command)
 
-        # Update run status in DB
-        if (self.run_number):
-            self.db.set_run_time_start(self.run_number,self.db.now_str())
-            self.db.set_run_status(self.run_number,self.db.DB_RUN_STATUS_RUNNING)
+        ## Update run status in DB
+        #if (self.run_number):
+        #    self.db.set_run_time_start(self.run_number,self.db.now_str())
+        #    self.db.set_run_status(self.run_number,self.db.DB_RUN_STATUS_RUNNING)
 
     def stop(self):
 
@@ -900,11 +933,11 @@ class Run:
         # Write run name to last_run file for monitoring
         with open(self.last_run_file,"w") as lf: lf.write("%s\n"%self.run_name)
 
-        # Finalize run in DB
-        if (self.run_number):
-            self.db.set_run_status(self.run_number,self.final_status)
-            self.db.set_run_time_stop(self.run_number,self.db.now_str())
-            self.db.set_run_comment_end(self.run_number,self.db.now_str(),self.run_comment_end)
+        ## Finalize run in DB
+        #if (self.run_number):
+        #    self.db.set_run_status(self.run_number,self.final_status)
+        #    self.db.set_run_time_stop(self.run_number,self.db.now_str())
+        #    self.db.set_run_comment_end(self.run_number,self.db.now_str(),self.run_comment_end)
 
     def clean_up(self):
 

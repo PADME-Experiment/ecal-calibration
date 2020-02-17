@@ -11,7 +11,7 @@ import getopt
 
 from Run     import Run
 from Logger  import Logger
-from PadmeDB import PadmeDB
+#from PadmeDB import PadmeDB
 
 class RunControlServer:
 
@@ -20,7 +20,7 @@ class RunControlServer:
         # Get position of DAQ main directory from PADME_DAQ_DIR environment variable
         # Default to current dir if not set
         #self.daq_dir = os.getenv('PADME_DAQ_DIR',".")
-        self.daq_dir = "."
+        self.daq_dir = os.getenv('PADME_CALIB_DIR',".")
 
         # Get port to use for RC connection from PADME_RC_PORT or use port 10000 as default
         self.runcontrol_port = int(os.getenv('PADME_RC_PORT',"10000"))
@@ -41,29 +41,32 @@ class RunControlServer:
 
         # Define what setup to use at startup (can be changed interactively)
         #initial_setup = self.get_initial_setup()
-        initial_setup = "calibration"
+
+        # Define name of common calibration setup
+        self.calib_setup = "calibration"
 
         #print "=== Starting PADME Calibration Run Control server with %s setup"%initial_setup
         print "=== Starting PADME Calibration Run Control server"
 
         # Create run (default to board 0 channel 0)
         self.run = Run()
-        if (self.run.change_setup(initial_setup,0,0) == "error"):
-            print "ERROR - Error while changing run setup to %s"%initial_setup
+        if (self.run.change_setup(self.calib_setup) == "error"):
+            print "ERROR - Error while setting run setup to %s"%self.calib_setup
             if os.path.exists(self.lock_file): os.remove(self.lock_file)
             exit(1)
 
         # Start in idle state
         self.current_state = "idle"
 
-        # Create handler for PadmeDB
-        self.db = PadmeDB()
+        ## Create handler for PadmeDB
+        #self.db = PadmeDB()
 
         # Get list of possible run types from DB
-        self.run_type_list = self.db.get_run_types()
-        if self.run_type_list == []:
-            print "WARNING - No run types found in DB. Using default."
-            self.run_type_list = ['TEST','FAKE']
+        #self.run_type_list = self.db.get_run_types()
+        #if self.run_type_list == []:
+        #    print "WARNING - No run types found in DB. Using default."
+        #    self.run_type_list = ['TEST','FAKE']
+        self.run_type_list = ['CALIBRATION']
         print "--- Known run types ---"
         print self.run_type_list
 
@@ -72,7 +75,9 @@ class RunControlServer:
         self.re_get_board_config_zsup = re.compile("^get_board_config_zsup (\d+)$")
         self.re_get_board_log_file_daq = re.compile("^get_board_log_file_daq (\d+)$")
         self.re_get_board_log_file_zsup = re.compile("^get_board_log_file_zsup (\d+)$")
-        self.re_change_setup = re.compile("^change_setup (\w+)$")
+        #self.re_change_setup = re.compile("^change_setup (\w+)$")
+        self.re_change_crystal = re.compile("^change_crystal\s+(\d+)\s+(\d+)$")
+        self.re_change_hv = re.compile("^change_hv\s+(\d+)$")
 
         # Create a TCP/IP socket
         if not self.create_socket():
@@ -122,8 +127,8 @@ class RunControlServer:
 
     def final_cleanup(self):
 
-        # Save setup currently in use before exiting
-        self.save_final_setup(self.run.setup)
+        ## Save setup currently in use before exiting
+        #self.save_final_setup(self.run.setup)
 
         # Final clean up procedure before exiting
         if self.sock:
@@ -163,31 +168,31 @@ class RunControlServer:
 
         return "ok"
 
-    def get_initial_setup(self):
+    #def get_initial_setup(self):
+    #
+    #    setup = "test"
+    #
+    #    lus = ""
+    #    if (os.path.exists(self.lus_file)):
+    #        if (os.path.isfile(self.lus_file)):
+    #            lusf = open(self.lus_file,"r")
+    #            lus = lusf.read().strip("\n")
+    #            lusf.close()
+    #            if (lus == ""):
+    #                print "WARNING - File with last used setup %s exists but it is empty - Using default setup %s"%(self.lus_file,setup)
+    #            else:
+    #                setup = lus
+    #        else:
+    #            print "WARNING - File with last used setup %s exists but it is not a file - Using default setup %s"%(self.lus_file,setup)
+    #    else:
+    #        print "WARNING - Could not find file with last used setup %s - Using default setup %s"%(self.lus_file,setup)
+    #
+    #    return setup
 
-        setup = "test"
-
-        lus = ""
-        if (os.path.exists(self.lus_file)):
-            if (os.path.isfile(self.lus_file)):
-                lusf = open(self.lus_file,"r")
-                lus = lusf.read().strip("\n")
-                lusf.close()
-                if (lus == ""):
-                    print "WARNING - File with last used setup %s exists but it is empty - Using default setup %s"%(self.lus_file,setup)
-                else:
-                    setup = lus
-            else:
-                print "WARNING - File with last used setup %s exists but it is not a file - Using default setup %s"%(self.lus_file,setup)
-        else:
-            print "WARNING - Could not find file with last used setup %s - Using default setup %s"%(self.lus_file,setup)
-
-        return setup
-
-    def save_final_setup(self,setup):
-
-        print "Saving current setup %s to %s\n"%(setup,self.lus_file)
-        with open(self.lus_file,"w") as lf: lf.write("%s\n"%setup)
+    #def save_final_setup(self,setup):
+    #
+    #    print "Saving current setup %s to %s\n"%(setup,self.lus_file)
+    #    with open(self.lus_file,"w") as lf: lf.write("%s\n"%setup)
 
     def sigint_handler(self,signal,frame):
 
@@ -287,16 +292,16 @@ class RunControlServer:
                 return "client_close"
             elif (cmd == "get_state"):
                 self.send_answer(self.current_state)
-            elif (cmd == "get_setup"):
-                self.send_answer(self.run.setup)
-            elif (cmd == "get_setup_list"):
-                self.send_answer(self.get_setup_list())
+            #elif (cmd == "get_setup"):
+            #    self.send_answer(self.run.setup)
+            #elif (cmd == "get_setup_list"):
+            #    self.send_answer(self.get_setup_list())
             elif (cmd == "get_board_list"):
                 self.send_answer(str(self.run.boardid_list))
             elif (cmd == "get_trig_config"):
                 self.send_answer(self.get_trig_config())
-            elif (cmd == "get_run_number"):
-                self.send_answer(str(self.db.get_last_run_in_db()))
+            #elif (cmd == "get_run_number"):
+            #    self.send_answer(str(self.db.get_last_run_in_db()))
             elif (cmd == "new_run"):
                 res = self.new_run()
                 if (res == "client_close"):
@@ -313,17 +318,28 @@ class RunControlServer:
                 self.send_answer("exiting")
                 return "exit"
             elif (cmd == "help"):
+#                msg = """Available commands:
+#help\t\t\t\tShow this help
+#get_state\t\t\tShow current state of RunControl
+#get_setup\t\t\tShow current setup name
+#get_setup_list\t\t\tShow list of available setups
+#get_board_list\t\t\tShow list of boards in use with current setup
+#get_board_config_daq <b>\tShow current configuration of board DAQ process <b>
+#get_board_config_zsup <b>\tShow current configuration of board ZSUP process <b>
+#get_trig_config\t\t\tShow current configuration of trigger process
+#get_run_number\t\t\tReturn last run number in DB
+#change_setup <setup>\t\tChange run setup to <setup>
+#new_run\t\t\t\tInitialize system for a new run
+#shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
                 msg = """Available commands:
 help\t\t\t\tShow this help
 get_state\t\t\tShow current state of RunControl
-get_setup\t\t\tShow current setup name
-get_setup_list\t\t\tShow list of available setups
 get_board_list\t\t\tShow list of boards in use with current setup
 get_board_config_daq <b>\tShow current configuration of board DAQ process <b>
 get_board_config_zsup <b>\tShow current configuration of board ZSUP process <b>
 get_trig_config\t\t\tShow current configuration of trigger process
-get_run_number\t\t\tReturn last run number in DB
-change_setup <setup>\t\tChange run setup to <setup>
+change_crystal <board> <channel>\tChange crystal to run setup to <setup>
+change_hv <hv>\t\t\tChange HV to <hv>
 new_run\t\t\t\tInitialize system for a new run
 shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
                 self.send_answer(msg)
@@ -342,9 +358,19 @@ shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
                     self.send_answer(self.get_board_config_zsup(int(m.group(1))))
                     found_re = True
 
-                m = self.re_change_setup.match(cmd)
+                #m = self.re_change_setup.match(cmd)
+                #if (m):
+                #    self.send_answer(self.change_setup(m.group(1)))
+                #    found_re = True
+
+                m = self.re_change_crystal.match(cmd)
                 if (m):
-                    self.send_answer(self.change_setup(m.group(1)))
+                    self.send_answer(self.change_crystal(m.group(1),m.group(2)))
+                    found_re = True
+
+                m = self.re_change_hv.match(cmd)
+                if (m):
+                    self.send_answer(self.change_hv(m.group(1)))
                     found_re = True
 
                 # No regular expression matched: command is unknown
@@ -363,16 +389,16 @@ shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
                 return "client_close"
             elif (cmd == "get_state"):
                 self.send_answer(self.current_state)
-            elif (cmd == "get_setup"):
-                self.send_answer(self.run.setup)
+            #elif (cmd == "get_setup"):
+            #    self.send_answer(self.run.setup)
             elif (cmd == "get_board_list"):
                 self.send_answer(str(self.run.boardid_list))
             elif (cmd == "get_trig_config"):
                 self.send_answer(self.get_trig_config())
             elif (cmd == "get_trig_log"):
                 self.send_answer(self.get_trig_log())
-            elif (cmd == "get_run_number"):
-                self.send_answer(str(self.run.run_number))
+            #elif (cmd == "get_run_number"):
+            #    self.send_answer(str(self.run.run_number))
             elif (cmd == "abort_run"):
                 return self.abort_run()
             elif (cmd == "start_run"):
@@ -381,10 +407,24 @@ shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
                 self.send_answer("exiting")
                 return "exit"
             elif (cmd == "help"):
+#                msg = """Available commands:
+#help\t\t\t\tShow this help
+#get_state\t\t\tShow current state of RunControl
+#get_setup\t\t\tShow current setup name
+#get_board_list\t\t\tShow list of boards in use with current setup
+#get_board_config_daq <b>\tShow current configuration of board DAQ process<b>
+#get_board_config_zsup <b>\tShow current configuration of board ZSUP process<b>
+#get_board_log_file_daq <b>\tGet name of log file for board DAQ process<b>
+#get_board_log_file_zsup <b>\tGet name of log file for board ZSUP process<b>
+#get_trig_config\t\t\tShow current configuration of trigger process
+#get_trig_log\t\t\tGet name of log file for trigger process
+#get_run_number\t\t\tReturn current run number
+#start_run\t\t\t\tStart run
+#abort_run\t\t\t\tAbort run
+#shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
                 msg = """Available commands:
 help\t\t\t\tShow this help
 get_state\t\t\tShow current state of RunControl
-get_setup\t\t\tShow current setup name
 get_board_list\t\t\tShow list of boards in use with current setup
 get_board_config_daq <b>\tShow current configuration of board DAQ process<b>
 get_board_config_zsup <b>\tShow current configuration of board ZSUP process<b>
@@ -392,7 +432,6 @@ get_board_log_file_daq <b>\tGet name of log file for board DAQ process<b>
 get_board_log_file_zsup <b>\tGet name of log file for board ZSUP process<b>
 get_trig_config\t\t\tShow current configuration of trigger process
 get_trig_log\t\t\tGet name of log file for trigger process
-get_run_number\t\t\tReturn current run number
 start_run\t\t\t\tStart run
 abort_run\t\t\t\tAbort run
 shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
@@ -440,26 +479,39 @@ shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
                 return "client_close"
             elif (cmd == "get_state"):
                 self.send_answer(self.current_state)
-            elif (cmd == "get_setup"):
-                self.send_answer(self.run.setup)
+            #elif (cmd == "get_setup"):
+            #    self.send_answer(self.run.setup)
             elif (cmd == "get_board_list"):
                 self.send_answer(str(self.run.boardid_list))
             elif (cmd == "get_trig_config"):
                 self.send_answer(self.get_trig_config())
             elif (cmd == "get_trig_log"):
                 self.send_answer(self.get_trig_log())
-            elif (cmd == "get_run_number"):
-                self.send_answer(str(self.run.run_number))
+            #elif (cmd == "get_run_number"):
+            #    self.send_answer(str(self.run.run_number))
             elif (cmd == "stop_run"):
                 return self.stop_run()
             elif (cmd == "shutdown"):
                 self.send_answer("exiting")
                 return "exit"
             elif (cmd == "help"):
+#                msg = """Available commands:
+#help\t\t\t\tShow this help
+#get_state\t\t\tShow current state of RunControl
+#get_setup\t\t\tShow current setup name
+#get_board_list\t\t\tShow list of boards in use with current setup
+#get_board_config_daq <b>\tShow current configuration of board DAQ process<b>
+#get_board_config_zsup <b>\tShow current configuration of board ZSUP process<b>
+#get_board_log_file_daq <b>\tGet name of log file for board DAQ process<b>
+#get_board_log_file_zsup <b>\tGet name of log file for board ZSUP process<b>
+#get_trig_config\t\t\tShow current configuration of trigger process
+#get_trig_log\t\t\tGet name of log file for trigger process
+#get_run_number\t\t\tReturn current run number
+#stop_run\t\t\t\tStop the run
+#shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
                 msg = """Available commands:
 help\t\t\t\tShow this help
 get_state\t\t\tShow current state of RunControl
-get_setup\t\t\tShow current setup name
 get_board_list\t\t\tShow list of boards in use with current setup
 get_board_config_daq <b>\tShow current configuration of board DAQ process<b>
 get_board_config_zsup <b>\tShow current configuration of board ZSUP process<b>
@@ -467,7 +519,6 @@ get_board_log_file_daq <b>\tGet name of log file for board DAQ process<b>
 get_board_log_file_zsup <b>\tGet name of log file for board ZSUP process<b>
 get_trig_config\t\t\tShow current configuration of trigger process
 get_trig_log\t\t\tGet name of log file for trigger process
-get_run_number\t\t\tReturn current run number
 stop_run\t\t\t\tStop the run
 shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
                 self.send_answer(msg)
@@ -573,41 +624,63 @@ shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
     def get_trig_log(self):
         return self.run.trigger.log_file
 
-    def read_setup_list(self):
+    #def read_setup_list(self):
+    #
+    #    # Get list of available setups
+    #    setup_main_dir = self.daq_dir+"/setup"
+    #    setups = []
+    #    for top,dirs,files in os.walk(setup_main_dir):
+    #        if (top == setup_main_dir):
+    #            for setup_dir in dirs: setups.append(setup_dir)
+    #    setups.sort()
+    #    return setups
 
-        # Get list of available setups
-        setup_main_dir = self.daq_dir+"/setup"
-        setups = []
-        for top,dirs,files in os.walk(setup_main_dir):
-            if (top == setup_main_dir):
-                for setup_dir in dirs: setups.append(setup_dir)
-        setups.sort()
-        return setups
+    #def get_setup_list(self):
+    #
+    #    return str(self.read_setup_list())
 
-    def get_setup_list(self):
+    #def change_setup(self,setup):
+    #
+    #    # Check if requested setup is known
+    #    if not (setup in self.read_setup_list()):
+    #        print "change_setup - ERROR: request to set unknown setup %s"%setup
+    #        return "error"
+    #
+    #    # Change (or reload) setup
+    #    if (setup==self.run.setup):
+    #        print "change_setup - reloading setup %s"%setup
+    #    else:
+    #        print "change_setup - changing setup from %s to %s"%(self.run.setup,setup)
+    #    if self.run.change_setup(setup) == "error":
+    #        print "RunControlServer::change_setup - ERROR while loading new setup %s"%setup
+    #        return "error"
+    #
+    #    print "change_setup - saving new setup %s to %s\n"%(setup,self.lus_file)
+    #    with open(self.lus_file,"w") as lf: lf.write("%s\n"%setup)
+    #
+    #    return setup
 
-        return str(self.read_setup_list())
+    def change_crystal(self,board,channel):
 
-    def change_setup(self,setup):
-
-        # Check if requested setup is known
-        if not (setup in self.read_setup_list()):
-            print "change_setup - ERROR: request to set unknown setup %s"%setup
+        # Check if crystal address (board/channel) is correct
+        if board<0 or (board>9 and board<14) or board>23 or channel<0 or channel>31:
+            print "change_crystak - ERROR: request to set out of bound board/channel: %d/%d"%(board,channel)
             return "error"
 
-        # Change (or reload) setup
-        if (setup==self.run.setup):
-            print "change_setup - reloading setup %s"%setup
-        else:
-            print "change_setup - changing setup from %s to %s"%(self.run.setup,setup)
-        if self.run.change_setup(setup) == "error":
-            print "RunControlServer::change_setup - ERROR while loading new setup %s"%setup
+        print "change_crystal - changing crystal to board/channel %d/%d"%(board,channel)
+        self.run.calib_board = board
+        self.run.calib_channel = channel
+        if self.run.change_setup(self.calib_setup) == "error":
+            print "CalibRunControl::change_crystal - ERROR while setting board/channel to %d/%d"%(board,channel)
             return "error"
 
-        print "change_setup - saving new setup %s to %s\n"%(setup,self.lus_file)
-        with open(self.lus_file,"w") as lf: lf.write("%s\n"%setup)
+        return "%d,%d"%(board,channel)
 
-        return setup
+    def change_hv(self,hv):
+
+        print "change_hv - changing HV to %d"%hv
+        self.run.calib_hv = hv
+        return "%d"%hv
 
     def new_run(self):
 
@@ -631,33 +704,33 @@ shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
         #    return "error"
         #self.send_answer(str(newrun_number))
 
-        # Report current setup
-        self.send_answer("setup %s"%self.run.setup)
+        ## Report current setup
+        #self.send_answer("setup %s"%self.run.setup)
 
-        # Assign number to new run using first free number in DB
-        newrun_number = self.db.get_last_run_in_db()+1
+        ## Assign number to new run using first free number in DB
+        #newrun_number = self.db.get_last_run_in_db()+1
 
-        # Retrieve run type. Accept only from list of known run types
-        # Return run type used or "error" for invalid answer
-        self.send_answer("run_types %s"%",".join(self.run_type_list))
-        newrun_type = ""
-        #self.send_answer("run_type")
-        ans = self.get_command()
-        if (ans == "error"):
-            print "run_type - client returned error"
-            return "error"
-        elif (ans=="client_close"):
-            return "client_close"
-        elif ans in self.run_type_list:
-            newrun_type = ans
-            if newrun_type == "FAKE":
-                print "run_type - *** FAKE run requested: setting run number to 0 ***"
-                newrun_number = 0
-            self.send_answer(newrun_type)
-        else:
-            print "run_type - invalid option %s received"%ans
-            self.send_answer("error")
-            return "error"
+        ## Retrieve run type. Accept only from list of known run types
+        ## Return run type used or "error" for invalid answer
+        #self.send_answer("run_types %s"%",".join(self.run_type_list))
+        #newrun_type = ""
+        ##self.send_answer("run_type")
+        #ans = self.get_command()
+        #if (ans == "error"):
+        #    print "run_type - client returned error"
+        #    return "error"
+        #elif (ans=="client_close"):
+        #    return "client_close"
+        #elif ans in self.run_type_list:
+        #    newrun_type = ans
+        #    if newrun_type == "FAKE":
+        #        print "run_type - *** FAKE run requested: setting run number to 0 ***"
+        #        newrun_number = 0
+        #    self.send_answer(newrun_type)
+        #else:
+        #    print "run_type - invalid option %s received"%ans
+        #    self.send_answer("error")
+        #    return "error"
 
         #newrun_type = None
         #for rtype in self.run_type_list:
@@ -674,20 +747,25 @@ shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
         #    self.send_answer("error")
         #    return "error"
 
-        # Now we can send back the assigned run number
-        self.send_answer("run_number %d"%newrun_number)
+        ## Now we can send back the assigned run number
+        #self.send_answer("run_number %d"%newrun_number)
 
-        newrun_user = ""
-        self.send_answer("shift_crew")
-        ans = self.get_command()
-        if (ans=="client_close"): return "client_close"
-        newrun_user = ans
+        #newrun_user = ""
+        #self.send_answer("shift_crew")
+        #ans = self.get_command()
+        #if (ans=="client_close"): return "client_close"
+        #newrun_user = ans
 
-        newrun_comment = ""
-        self.send_answer("run_comment")
-        ans = self.get_command()
-        if (ans=="client_close"): return "client_close"
-        newrun_comment = ans
+        #newrun_comment = ""
+        #self.send_answer("run_comment")
+        #ans = self.get_command()
+        #if (ans=="client_close"): return "client_close"
+        #newrun_comment = ans
+
+        newrun_number = 0
+        newrun_type = "CALIBRATION"
+        newrun_user = "ECal Calibration"
+        newrun_comment = "Board %d Channel %d HV %d"%(self.run.calib_board,self.run.calib_channel,self.run.calib_hv)
 
         print "Run number:  %d"%newrun_number
         print "Run type:    %s"%newrun_type
@@ -997,14 +1075,14 @@ shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
                 if (self.run.run_number):
                     self.db.set_run_status(self.run.run_number,self.db.DB_RUN_STATUS_END_ERROR)
 
-        # Parse all log files looking for DBINFO lines
-        self.run.trigger.parse_log()
-        for adc in (self.run.adcboard_list):
-            adc.parse_log_daq()
-            adc.parse_log_zsup()
-        self.run.merger.parse_log()
-        for lvl1 in self.run.level1_list:
-            lvl1.parse_log()
+        ## Parse all log files looking for DBINFO lines
+        #self.run.trigger.parse_log()
+        #for adc in (self.run.adcboard_list):
+        #    adc.parse_log_daq()
+        #    adc.parse_log_zsup()
+        #self.run.merger.parse_log()
+        #for lvl1 in self.run.level1_list:
+        #    lvl1.parse_log()
 
         # Update total number of events for run
         self.db.set_run_total_events(self.run.run_number,self.db.compute_run_total_events(self.run.run_number))

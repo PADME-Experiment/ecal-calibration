@@ -4,7 +4,7 @@ import time
 import shlex
 import subprocess
 
-from PadmeDB  import PadmeDB
+#from PadmeDB  import PadmeDB
 
 class Trigger:
 
@@ -12,12 +12,13 @@ class Trigger:
 
         # Get position of DAQ main directory from PADME_DAQ_DIR environment variable
         # Default to current dir if not set
-        self.daq_dir = os.getenv('PADME_DAQ_DIR',".")
+        #self.daq_dir = os.getenv('PADME_DAQ_DIR',".")
+        self.daq_dir = os.getenv('PADME_CALIB_DIR',".")
 
         # Define id file for passwordless ssh command execution
         self.ssh_id_file = "%s/.ssh/id_rsa_daq"%os.getenv('HOME',"~")
 
-        self.db = PadmeDB()
+        #self.db = PadmeDB()
 
         self.status = "idle"
 
@@ -261,19 +262,19 @@ class Trigger:
 
         print self.format_config()
 
-    def create_trigger(self):
-    
-        # Create Trigger process in DB
-        self.process_id = self.db.create_trigger_process(self.run_number,self.node_id)
-        if self.process_id == -1:
-            print "Trigger::create_trigger - ERROR: unable to create new Trigger process in DB"
-            return "error"
-
-        # Add all configuration parameters
-        for cfg in self.config_list():
-            self.db.add_cfg_para_proc(self.process_id,cfg[0],cfg[1])
-
-        return "ok"
+    #def create_trigger(self):
+    #
+    #    # Create Trigger process in DB
+    #    self.process_id = self.db.create_trigger_process(self.run_number,self.node_id)
+    #    if self.process_id == -1:
+    #        print "Trigger::create_trigger - ERROR: unable to create new Trigger process in DB"
+    #        return "error"
+    #
+    #    # Add all configuration parameters
+    #    for cfg in self.config_list():
+    #        self.db.add_cfg_para_proc(self.process_id,cfg[0],cfg[1])
+    #
+    #    return "ok"
 
     def start_trig(self):
 
@@ -297,9 +298,9 @@ class Trigger:
             print "Trigger::start_trig - ERROR: Execution failed: %s",e
             return 0
 
-        # Tag start of process in DB
-        if self.run_number:
-            self.db.set_process_time_create(self.process_id,self.db.now_str())
+        ## Tag start of process in DB
+        #if self.run_number:
+        #    self.db.set_process_time_create(self.process_id,self.db.now_str())
 
         # Return process id
         return self.process.pid
@@ -312,8 +313,8 @@ class Trigger:
                 # Process exited: clean up defunct process and close log file
                 self.process.wait()
                 self.log_handle.close()
-                if self.run_number:
-                    self.db.set_process_time_end(self.process_id,self.db.now_str())
+                #if self.run_number:
+                #    self.db.set_process_time_end(self.process_id,self.db.now_str())
                 return True
             time.sleep(0.5)
 
@@ -335,8 +336,8 @@ class Trigger:
                 # Process exited: clean up defunct process and close log file
                 self.process.wait()
                 self.log_handle.close()
-                if self.run_number:
-                    self.db.set_process_time_end(self.process_id,self.db.now_str())
+                #if self.run_number:
+                #    self.db.set_process_time_end(self.process_id,self.db.now_str())
                 return True
             time.sleep(0.5)
 
@@ -348,17 +349,17 @@ class Trigger:
             self.process.wait()
             self.log_handle.close()
 
-        if self.run_number:
-            self.db.set_process_time_end(self.process_id,self.db.now_str())
+        #if self.run_number:
+        #    self.db.set_process_time_end(self.process_id,self.db.now_str())
         return False
 
-    def parse_log(self):
-
-        # Look for DBINFO lines in log file and send them to DBINFO line processor
-        if os.path.exists(self.log_file) and os.path.isfile(self.log_file):
-            with open(self.log_file,"r") as log:
-                for line in log:
-                    if self.re_dbinfo_line.match(line):
-                        self.db.manage_dbinfo_entry(self.process_id,line)
-        else:
-            print "Trigger::parse_log - WARNING: Trigger log file %s not found"%self.log_file
+    #def parse_log(self):
+    #
+    #    # Look for DBINFO lines in log file and send them to DBINFO line processor
+    #    if os.path.exists(self.log_file) and os.path.isfile(self.log_file):
+    #        with open(self.log_file,"r") as log:
+    #            for line in log:
+    #                if self.re_dbinfo_line.match(line):
+    #                    self.db.manage_dbinfo_entry(self.process_id,line)
+    #    else:
+    #        print "Trigger::parse_log - WARNING: Trigger log file %s not found"%self.log_file
