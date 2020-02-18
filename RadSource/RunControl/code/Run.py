@@ -91,22 +91,8 @@ class Run:
 
     def change_run(self):
 
-        ## Check if requested run number was not used before
-        ## Saves the day if more than one RunControl program is running at the same time (DON'T DO THAT!!!)
-        #if (self.run_number):
-        #    run_is_in_db = self.db.is_run_in_db(self.run_number)
-        #    if (run_is_in_db):
-        #        print "Run::change_run - ERROR - Run %d is already in the DB: cannot use it again"%self.run_number
-        #        print "Please check if someone else is using this RunControl before retrying"
-        #        #self.send_answer("error_init")
-        #        return False
-
         # Define run name using run number and start time
-        #self.run_name = "run_%7.7d_%s"%(self.run_number,time.strftime("%Y%m%d_%H%M%S",time.gmtime()))
         self.run_name = "calib_%15.15s_%2.2d_%2.2d_%4.4dV"%(time.strftime("%Y%m%d_%H%M%S",time.gmtime()),self.calib_board,self.calib_channel,self.calib_hv)
-
-        ## Write run name to current_run file for monitoring
-        #with open(self.current_run_file,"w") as lf: lf.write("%s\n"%self.run_name)
 
         self.run_dir = self.daq_dir+"/runs/"+self.run_name
 
@@ -140,13 +126,6 @@ class Run:
         # Configure Level1 processes for this run
         for level1 in self.level1_list:
             self.runconfig_level1(level1)
-
-        ## If this is a real run, create it in the DB
-        #if (self.run_number):
-        #    print "Creating Run %d structure in DB"%self.run_number
-        #    if self.create_run_in_db() == "error":
-        #        print "Run::change_run - ERROR - Cannot create Run in the DB"
-        #        return False
 
         return True
 
@@ -194,11 +173,11 @@ class Run:
         self.level1_list = []
 
         self.run_number = 0
-        self.run_name = "run_%7.7d_%s"%(self.run_number,time.strftime("%Y%m%d_%H%M%S",time.gmtime()))
+        self.run_name = "calib_%15.15s_%2.2d_%2.2d_%4.4dV"%(time.strftime("%Y%m%d_%H%M%S",time.gmtime()),self.calib_board,self.calib_channel,self.calib_hv)
         self.run_type = "CALIBRATION"
         self.run_user = "ECal Calibration"
-        self.run_comment_start = "Generic start of run"
-        self.run_comment_end = "Generic end of run"
+        self.run_comment_start = "SoR"
+        self.run_comment_end = "EoR"
 
         self.run_dir = "%s/runs/%s"%(self.daq_dir,self.run_name)
 
@@ -264,8 +243,6 @@ class Run:
                     self.total_daq_time = int(p_value)
                 elif (p_name == "trigger_node"):
                     self.trigger_node = p_value
-                #elif (p_name == "trigger_mask"):
-                #    self.trigger_mask = p_value
                 elif (p_name == "merger_node"):
                     self.merger_node = p_value
                 elif (p_name == "merger_node_list"):
@@ -329,6 +306,10 @@ class Run:
                     board_link = "%s %s %s %s"%(board,host,port,node)
                     cfg_list.append(["board_link","%s %s %s %s"%(board,host,port,node)])
 
+        cfg_list.append(["calib_board",     str(self.calib_board)])
+        cfg_list.append(["calib_channel",   str(self.calib_channel)])
+        cfg_list.append(["calib_hv",        str(self.calib_hv)])
+
         cfg_list.append(["config_dir",      self.config_dir])
         cfg_list.append(["config_file",     self.config_file])
         cfg_list.append(["config_file_head",self.config_file_head])
@@ -362,45 +343,6 @@ class Run:
         cfgstring = ""
         for cfg in self.config_list(): cfgstring += "%-30s %s\n"%(cfg[0],cfg[1])
         return cfgstring
-
-    #def create_run_in_db(self):
-    #
-    #    # Create run in DB
-    #    self.db.create_run(self.run_number,self.run_name,self.run_type)
-    #    self.db.set_run_time_create(self.run_number,self.db.now_str())
-    #    self.db.set_run_user(self.run_number,self.run_user)
-    #    self.db.set_run_comment_start(self.run_number,self.db.now_str(),self.run_comment_start)
-    #
-    #    # Add all configuration parameters
-    #    for cfg in self.config_list():
-    #        self.db.add_cfg_para_run(self.run_number,cfg[0],cfg[1])
-    #
-    #    # Create board structures in DB
-    #    for adc in (self.adcboard_list):
-    #        if adc.create_proc_daq() == "error":
-    #            print "Run::create_run - ERROR - Cannot create DAQ process for board %d in the DB"%adc.board_id
-    #            return "error"
-    #        if adc.create_proc_zsup() == "error":
-    #            print "Run::create_run - ERROR - Cannot create ZSUP process for board %d in the DB"%adc.board_id
-    #            return "error"
-    #
-    #    # Create Trigger structure in DB
-    #    if self.trigger.create_trigger() == "error":
-    #        print "Run::create_run - ERROR - Cannot create Trigger process in the DB"
-    #        return "error"
-    #
-    #    # Create Merger structure in DB
-    #    if self.merger.create_merger() == "error":
-    #        print "Run::create_run - ERROR - Cannot create Merger process in the DB"
-    #        return "error"
-    #
-    #    # Create Level1 structures in DB
-    #    for lvl1 in (self.level1_list):
-    #        if lvl1.create_level1() == "error":
-    #            print "Run::create_run - ERROR - Cannot create Level1 process for level1 %d in the DB"%lvl1.level1_id
-    #            return "error"
-    #
-    #    return "ok"
 
     def create_log_dir(self):
 
@@ -528,7 +470,6 @@ class Run:
 
                 # Open receiving end of tunnel on Merger node
                 command = "nc -l -k -v --recv-only %s %d > %s < /dev/zero"%(self.merger.node_ip,port_number,adc.output_stream_zsup)
-                #command = "nc --udp -l -v --recv-only %s %d > %s < /dev/zero"%(self.merger.node_ip,port_number,adc.output_stream_zsup)
                 if self.merger.node_id != 0:
                     command = "ssh -f -i %s %s '( %s )'"%(self.ssh_id_file,self.merger.node_ip,command)
                 print command
@@ -553,7 +494,6 @@ class Run:
             self.hand_rcv.append(log_handle)
 
             # Open receiving end of tunnel on Merger node
-            #command = "nc -l -k -v --recv-only %s %d > %s < /dev/zero"%(self.merger.node_ip,port_number,self.trigger.output_stream)
             command = "nc --udp -l -v --recv-only %s %d > %s < /dev/zero"%(self.merger.node_ip,port_number,self.trigger.output_stream)
             if self.merger.node_id != 0:
                 command = "ssh -f -i %s %s '( %s )'"%(self.ssh_id_file,self.merger.node_ip,command)
@@ -613,8 +553,7 @@ class Run:
             log_handle = open(log_file,"w")
             self.hand_snd.append(log_handle)
 
-            # Open sending end of tunnel on Trigger node. Add some code to wait for receiving end to appear before proceeding.
-            #command = "while ! nc -z %s %d ; do sleep 1 ; done ; nc -v --send-only %s %d < %s > /dev/null"%(self.merger.node_ip,port_number,self.merger.node_ip,port_number,self.trigger.output_stream)
+            # Open sending end of tunnel on Trigger node.
             command = "nc -v --udp --send-only %s %d < %s > /dev/null"%(self.merger.node_ip,port_number,self.trigger.output_stream)
             if adc.node_id != 0:
                 command = "ssh -f -i %s %s '( %s )'"%(self.ssh_id_file,self.trigger.node_ip,command)
@@ -665,13 +604,6 @@ class Run:
 
         # Create new set of ADC board processes (DAQ and ZSUP) handlers
         self.daq_nodes_id_list = []
-        #for b in self.boardid_list:
-        #    print "Run - Configuring ADC board %d"%b
-        #    adcboard = ADCBoard(b)
-        #    self.configure_adcboard(adcboard)
-        #    self.adcboard_list.append(adcboard)
-        #    self.daq_nodes_id_list.append(adcboard.node_id)
-        # Only one board is actually needed
         print "Run - Configuring ADC board %d"%self.calib_board
         adcboard = ADCBoard(self.calib_board)
         self.configure_adcboard(adcboard,self.calib_channel)
@@ -684,7 +616,6 @@ class Run:
         # Store ip addresses of DAQ nodes in a dictionary
         self.daq_nodes_ip_list = {}
         for node_id in self.daq_nodes_id_list:
-            #self.daq_nodes_ip_list[node_id] = self.db.get_node_daq_ip(node_id)
             self.daq_nodes_ip_list[node_id] = self.node_ip[node_id]
 
         # Create new Trigger process handler
@@ -848,8 +779,6 @@ class Run:
         merger.run_number = self.run_number
 
         # Get node_id and node_ip from DB
-        #merger.node_id = self.db.get_node_id(self.merger_node)
-        #merger.node_ip = self.db.get_node_daq_ip(merger.node_id)
         merger.node_id = self.node_id[self.merger_node]
         merger.node_ip = self.node_ip[merger.node_id]
 
@@ -865,8 +794,6 @@ class Run:
         level1.run_number = self.run_number
 
         # Get node_id and node_ip from DB using Merger node
-        #level1.node_id = self.db.get_node_id(self.merger_node)
-        #level1.node_ip = self.db.get_node_daq_ip(level1.node_id)
         level1.node_id = self.node_id[self.merger_node]
         level1.node_ip = self.node_ip[level1.node_id]
 
@@ -902,11 +829,6 @@ class Run:
             print command
             os.system(command)
 
-        ## Update run status in DB
-        #if (self.run_number):
-        #    self.db.set_run_time_start(self.run_number,self.db.now_str())
-        #    self.db.set_run_status(self.run_number,self.db.DB_RUN_STATUS_RUNNING)
-
     def stop(self):
 
         # Disable triggers
@@ -932,12 +854,6 @@ class Run:
 
         # Write run name to last_run file for monitoring
         with open(self.last_run_file,"w") as lf: lf.write("%s\n"%self.run_name)
-
-        ## Finalize run in DB
-        #if (self.run_number):
-        #    self.db.set_run_status(self.run_number,self.final_status)
-        #    self.db.set_run_time_stop(self.run_number,self.db.now_str())
-        #    self.db.set_run_comment_end(self.run_number,self.db.now_str(),self.run_comment_end)
 
     def clean_up(self):
 
