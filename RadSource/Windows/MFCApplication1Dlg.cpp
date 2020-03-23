@@ -37,12 +37,6 @@
 #pragma comment (lib, "Mswsock.lib")
 #pragma comment (lib, "AdvApi32.lib")
 
-// Create CAxis object pointer
-//---------------------------------------------------------------------------
-CAxis* g_RobotJ1 = MPI_CreateAxis("X", eUT_LINEAR, eDT_D2);
-CAxis* g_RobotJ2 = MPI_CreateAxis("Y", eUT_LINEAR, eDT_D2);
-
-
 //#include <unistd.h>
 
 int icalled = 0;
@@ -61,6 +55,13 @@ int iResult;
 
 SOCKET ListenSocket = INVALID_SOCKET;
 SOCKET ClientSocket = INVALID_SOCKET;
+
+// Create CAxis object pointer
+//---------------------------------------------------------------------------
+//printf(" Create Axis pointers ...");
+CAxis* g_RobotJ1 = MPI_CreateAxis("X", eUT_ROTARY, eDT_D2);
+//CAxis* g_RobotJ2 = MPI_CreateAxis("Y", eUT_LINEAR, eDT_D2);
+
 
 struct addrinfo* result = NULL;
 struct addrinfo hints;
@@ -153,8 +154,8 @@ int createsocket() {
 		return 1;
 	}
 
-	printf("got client socket \n");
 
+	printf(" waiting to accept a client socket");
 	// Accept a client socket
 	ClientSocket = accept(ListenSocket, NULL, NULL);
 	if (ClientSocket == INVALID_SOCKET) {
@@ -163,6 +164,8 @@ int createsocket() {
 		WSACleanup();
 		return 1;
 	}
+
+	// printf("got client socket \n");
 
 	printf(" accepted client socket \n");
 	// No longer need server socket
@@ -374,48 +377,53 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 {
 	// TODO: Add your message handler code here and/or call default
 
+	int nRetCode = 0;
+	int iretx = 0;
+	int irety = 0;
+
 	
+
+	if (ifirst_connect == 0) {
+
+		// then initialize ethercat communication
+
+		nRetCode = MPI_ConnectMegaulink(true);
+		printf(" Connecting to MegaUlink ... \n");
+		//Sleep(5000);
+		
+		ifirst_connect = 1;
+		printf(" Connected to MegaUlink \n");
+		if (nRetCode == ERR_NO_ERROR) {
+			//MessageWin("Success Communication...");
+			printf("Success Communication ethercat \n");
+			// in degrees !!
+			iretx = MPI_InitialAxis(g_RobotJ1, 5000., 1000., 1000., 50000., 100, 10, 500000., 0.);
+			printf("InitialAxis code %d ", iretx);
+			//irety = MPI_InitialAxis(g_RobotJ2, 50., 100., 100., 2000., 150, 2., 2000., 0.);
+			// ifirst_connect = 1;
+
+		} else {
+			printf("error connecting ethercat - cannot continue\n");
+			//assert(nRetCode == ERR_NO_ERROR);
+			iretx = 1;
+			irety = 1;
+			// return;
+		}
+
+	
+
+	} else {
+
+	}
+
 	if (icalled == 0) {
 		int ireturn = createsocket();
 		if (ireturn == 0) {
 			printf(" server socket created \n");
 		}
 		else {
-			printf(" error creating server socket  \n");
+			printf(" error creating server socket - cannot continue ! \n");
 			return;
-		}
-
-
-
-		if(ifirst_connect== 0) {
-			// then initialize ethercat communication
-			int nRetCode = 0;
-
-			if (ifirst_connect == 0) {
-				nRetCode = MPI_ConnectMegaulink(true);
-				printf(" Connecting to MegaUlink ... \n");
-				Sleep(5000);
-			} else {
-				nRetCode = MPI_ConnectMegaulink(false);
-			}
-
-			ifirst_connect = 1;
-			printf(" Connected to MegaUlink \n");
-			int iretx = 0;
-			int irety = 0;
-			if (nRetCode == ERR_NO_ERROR) {
-				//MessageWin("Success Communication...");
-				printf("Success Communication ethercat \n");
-				iretx=MPI_InitialAxis(g_RobotJ1, 200, 2000, 2000, 20000, 150, 1, 2000, -1000);
-				irety=MPI_InitialAxis(g_RobotJ2, 400, 4000, 4000, 40000, 150, 2, 2000, -2000);
-				// ifirst_connect = 1;
-			} else {
-				printf("error connecting ethercat \n");
-				//assert(nRetCode == ERR_NO_ERROR);
-				iretx = 1;
-				irety = 1;
-			}
-
 		}
 	}
 	
@@ -493,25 +501,29 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 			char* tok;
 			char* command= "      ";
 			int tokcount = 0;
+			double realx = 0.;
+			double realy = 0.;
+			double xx;
+			double yy;
+			/*
 			int inumber;
 			int ix;
 			int iy;
 			int ipos;
-			double realx=0.;
-			double realy=0.;
 			double hv;
 			int icall;
+			*/
 
 			// buffer = command ; x ; y 
 
 			while ((tok = mystrsep(&linec, ";")) != NULL) {
 				if (tokcount == 0)  command = tok;
 				if (tokcount == 1) {
-					realx = atof(tok);
+					xx = atof(tok);
 					//realx = (ix * 2.12) + 1.56;
 				}
 				if (tokcount == 2) {
-					realy = atof(tok);
+					yy = atof(tok);
 					//realy = (iy * 2.12) + 1.56;
 				}
 
@@ -553,30 +565,48 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 				realposition.Format(_T("Position to home : %7.3f , %7.3f\n"), realx, realy);
 				SetDlgItemText(IDC_EDIT4, realposition);
 
+				// send to 0,0
+				iretmovex = MPI_MoveAbsolute(g_RobotJ1, realx);
+				//iretmovey = MPI_MoveAbsolute(g_RobotJ2, realy);
+				printf("Absolute moving  x to %0.3f cm. - code = %3d ..\n", realx, iretmovex);
+				printf("Absolute moving  y to %0.3f cm. - code = %3d ..\n", realy, iretmovey);
+
+				// CHECK THE MOTOR HAS STOPPED
+				bool is_moving = true;
+				while (is_moving) {
+					Sleep(1000);
+					iretmovex = MPI_IsMoving(g_RobotJ1, &is_moving);
+				}
+				printf(" motor movement has stopped \n");
+
 				// set home for motor x
 				MPI_StartHome(g_RobotJ1);
 				// MessageWin("Home process is started", g_RobotJ1);
 				printf(" Home process started for motor x \n");
-
-				Sleep(2000);
 
 				MPI_WaitHomeOver(g_RobotJ1, 25000);
 				// MessageWin("Home process is completed", g_RobotJ1);
 
 				printf(" Home process is completed for motor x \n");
 
+				/*
 				// set home for motor y
 				MPI_StartHome(g_RobotJ2);
 				// MessageWin("Home process is started", g_RobotJ2);
 				printf(" Home process started for motor y \n");
-
-				Sleep(2000);
+				
 
 				MPI_WaitHomeOver(g_RobotJ2, 25000);
 				// MessageWin("Home process is completed", g_RobotJ2);
 				printf(" Home process is completed for motor y \n");
 
-				Sleep(2000);
+				*/
+
+				// then verify they have arrived 
+				MPI_GetFeedbackPos(g_RobotJ1, &realx);
+				//MPI_GetFeedbackPos(g_RobotJ2, &realy);
+
+				printf(" feedback positions x = %0.3f ; y = %0.3f cm \n", realx, realy);
 
 				oldrealx = 0.0;
 				oldrealy = 0.0;
@@ -608,33 +638,67 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 				realposition.Format(_T("Moved to home position : %7.3f , %7.3f\n"), realx, realy);
 				SetDlgItemText(IDC_EDIT4, realposition);
 
-				Sleep(4000);
+				// Sleep(4000);
 
 
 			} 
 			
 			if (strcmp(command,"goabs ")==0) {
+				bool is_moving = true;
+
+				// translate crystal number to position
+				realx = (xx * 2.12) + 1.56;
+				realy = (yy * 2.12) + 1.56;
+				// positions are in cm -> translate to degrees as needed by HIWIN
+				double realxdeg = 288000. * realx / 80.;
+				double realydeg = 288000. * realy / 80.;
+		
 				// move to real position 
 				realposition.Format(_T("Absolute Position moved to : %7.3f , %7.3f\n"), realx, realy);
 				SetDlgItemText(IDC_EDIT4, realposition);
 
-			
 				// check if x is at home pos
 				// MPI_IsHomed(g_RobotJ1, &bHomex);
-				iretmovex = MPI_MoveAbsolute(g_RobotJ1, realx);
-				printf("Absolute moving  x to %0.3f mm. - code = %3d ..\n", realx,iretmovex);
+				iretmovex = MPI_MoveAbsolute(g_RobotJ1, realxdeg);
+				printf("Absolute moving  x to %0.3f cm. - code = %3d ..\n", realx,iretmovex);
 
+				// CHECK THE MOTOR HAS STOPPED
+				is_moving = true;
+				while (is_moving) {
+					Sleep(1000);
+					iretmovex = MPI_IsMoving(g_RobotJ1, &is_moving);
+				}
+				printf(" motor X movement has stopped \n");
+
+				//wait till operation completed
+				// Sleep(10000);
+
+				/*
 				// check if y is at home pos
 				// MPI_IsHomed(g_RobotJ2, &bHomey);
-				iretmovey = MPI_MoveAbsolute(g_RobotJ2, realy);
+				iretmovey = MPI_MoveAbsolute(g_RobotJ2, realydeg);
 				printf("Absolute moving  y to %0.3f mm. - code = %3d ..\n", realy,iretmovey);
 
+				// CHECK THE MOTOR HAS STOPPED
+				is_moving = true;
+				while (is_moving) {
+					Sleep(1000);
+					iretmovex = MPI_IsMoving(g_RobotJ2, &is_moving);
+				}
+				printf(" motor Y movement has stopped \n");
+
+
+				*/
+
 				// then verify they have arrived 
-				MPI_GetFeedbackPos(g_RobotJ1, &realx);
-				MPI_GetFeedbackPos(g_RobotJ2, &realy);
+				MPI_GetFeedbackPos(g_RobotJ1, &realxdeg);
+				//MPI_GetFeedbackPos(g_RobotJ2, &realy);
 
-				Sleep(2000);
-
+				// and translate back to cm
+				realx = realxdeg * 80. / 288000.;
+				realy = realydeg * 80. / 288000.;
+				printf(" feedback positions x = %0.3f ; y = %0.3f cm \n", realx, realy);
+				
 				oldrealx = realx;
 				oldrealy = realy;
 
@@ -665,23 +729,49 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 				printf("closing socket \n");
 				closesocket(ClientSocket);
 
+				// send motor to 0,0
+				// send to 0,0
+				iretmovex = MPI_MoveAbsolute(g_RobotJ1, realx);
+				//iretmovey = MPI_MoveAbsolute(g_RobotJ2, realy);
+				printf("Absolute moving  x to %0.3f cm. - code = %3d ..\n", realx, iretmovex);
+				printf("Absolute moving  y to %0.3f cm. - code = %3d ..\n", realy, iretmovey);
+
+				
+				// CHECK THE MOTOR HAS STOPPED
+				bool is_moving = true;
+				while (is_moving) {
+					Sleep(1000);
+					iretmovex = MPI_IsMoving(g_RobotJ1,&is_moving);
+				}
+				printf(" motor X movement has stopped \n");
+
+				// wait till movement complete
+				//Sleep(10000);
+
+
 				// set home for motor x
 				MPI_StartHome(g_RobotJ1);
 				// MessageWin("Home process is started", g_RobotJ1);
 				printf(" Home process started for motor x \n");
-				Sleep(2000);
 				MPI_WaitHomeOver(g_RobotJ1, 25000);
 				// MessageWin("Home process is completed", g_RobotJ1);
 				printf(" Home process is completed for motor x \n");
 
+				/*
 				// set home for motor y
 				MPI_StartHome(g_RobotJ2);
 				// MessageWin("Home process is started", g_RobotJ2);
 				printf(" Home process started for motor y \n");
-				Sleep(2000);
 				MPI_WaitHomeOver(g_RobotJ2, 25000);
 				// MessageWin("Home process is completed", g_RobotJ2);
 				printf(" Home process is completed for motor y \n");
+				*/
+
+				// then verify they have arrived 
+				MPI_GetFeedbackPos(g_RobotJ1, &realx);
+				//MPI_GetFeedbackPos(g_RobotJ2, &realy);
+
+				printf(" Home feedback positions x = %0.3f ; y = %0.3f cm \n", realx, realy);
 
 				realposition.Format(_T("Closed connection - waiting for new data from client \n"));
 				SetDlgItemText(IDC_EDIT3, realposition);
@@ -699,28 +789,68 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 			}
 
 			if (strcmp(command, "gorel ") == 0) {
+				bool is_moving = true;
+
+				// do not translate this :it's already new relative position
+				realx = xx;
+				realy = yy;
+				// positions are in cm -> translate to degrees as needed by HIWIN
+				double realxdeg = 288000. * realx / 80.;
+				double realydeg = 288000. * realy / 80.;
+
 				// move to real position 
 				realposition.Format(_T("Relative Position to move to : %7.3f , %7.3f\n"), realx, realy);
 				SetDlgItemText(IDC_EDIT4, realposition);
 
-	
 				double diffx = realx;
-				iretmovex = MPI_MoveRelative(g_RobotJ1, diffx);
+				double diffxdeg = realxdeg;
+				iretmovex = MPI_MoveRelative(g_RobotJ1, diffxdeg);
 				// and recalculate position
 				realx = oldrealx + diffx;
 				printf("Relative moving x by %0.3f to %0.3f mm. - code = %3d ..\n", diffx, realx, iretmovex);
 
+
+				// CHECK THE MOTOR HAS STOPPED
+				is_moving = true;
+				while (is_moving) {
+					Sleep(1000);
+					iretmovex = MPI_IsMoving(g_RobotJ1, &is_moving);
+				}
+				printf(" motor X movement has stopped \n");
+
+				// wait at least till operation completed
+				// Sleep(10000);
+
+
 				double diffy = realy;
-				iretmovey = MPI_MoveRelative(g_RobotJ2, diffy);
-				// and recalculate position
+				double diffydeg = realydeg;
 				realy = oldrealy + diffy;
+
+				/*
+				iretmovey = MPI_MoveRelative(g_RobotJ2, diffydeg);
+				// and recalculate position
 				printf("Relative moving y by %0.3f to %0.3f mm. - code = %3d ..\n", diffy, realy, iretmovey);
+ 
+				// CHECK THE MOTOR HAS STOPPED
+				is_moving = true;
+				while (is_moving) {
+					Sleep(1000);
+					iretmovex = MPI_IsMoving(g_RobotJ2, &is_moving);
+				}
+				printf(" motor Y movement has stopped \n");
+
+
+				*/
 
 				// then verify they have arrived 
-				MPI_GetFeedbackPos(g_RobotJ1, &realx);
-				MPI_GetFeedbackPos(g_RobotJ2, &realy);
+				MPI_GetFeedbackPos(g_RobotJ1, &realxdeg);
+				//MPI_GetFeedbackPos(g_RobotJ2, &realydeg);
+				
+				// and translate back to cm
+				realx = realxdeg * 80. / 288000.;
+				realy = realydeg * 80. / 288000.;
+				printf(" feedback positions x = %0.3f ; y = %0.3f cm \n", realx, realy);
 
-				Sleep(2000);
 
 				oldrealx = realx;
 				oldrealy = realy;
@@ -753,19 +883,25 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 				realposition.Format(_T("Whereis command received \n"));
 				SetDlgItemText(IDC_EDIT4, realposition);
 
-				double newrealx;
-				double newrealy;
+				double newrealx = 0.;
+				double newrealy = 0.;
 				int iretmovex = 0;
 				int iretmovey = 0;
 				// then verify where they are
 				iretmovex = MPI_GetFeedbackPos(g_RobotJ1, &newrealx);
-				iretmovey = MPI_GetFeedbackPos(g_RobotJ2, &newrealy);
+				//iretmovey = MPI_GetFeedbackPos(g_RobotJ2, &newrealy);
 
-				Sleep(2000);
+				// and convert to cm
+				// and translate back to cm
+				newrealx = newrealx * 80. / 288000.;
+				newrealy = newrealy * 80. / 288000.;
+				printf(" feedback positions x = %0.3f ; y = %0.3f cm \n", newrealx, newrealy);
 
-				printf("whereis : %7.3f , %7.3f \n", oldrealx, oldrealy);
+				// Sleep(2000);
 
-				sprintf_s(sendbuffer, 100, "where ; %7.3f ; %7.3f ; %3d ; %3d \n", oldrealx, oldrealy, iretmovex, iretmovey);
+				printf("whereis : %7.3f , %7.3f \n", newrealx, newrealy);
+
+				sprintf_s(sendbuffer, 100, "where ; %7.3f ; %7.3f ; %3d ; %3d \n", newrealx, newrealy, iretmovex, iretmovey);
 				int lenbuff = strlen(sendbuffer);
 				// Echo the buffer back to the sender
 				iSendResult = send(ClientSocket, sendbuffer, lenbuff, 0);
@@ -798,9 +934,28 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 				printf("Resetting everything - Waiting for data from client ... \n");
 				daqstatus.Format(_T("Reset everything - Waiting for data from client ... \n"));
 				SetDlgItemText(IDC_EDIT3, daqstatus);
-				// iok = 1;
+				
 				
 				// and home motors
+				double realx = 0.;
+				double realy = 0.;
+				// this means go to home position
+				realposition.Format(_T("Position to home : %7.3f , %7.3f\n"), realx, realy);
+				SetDlgItemText(IDC_EDIT4, realposition);
+
+				// send to 0,0
+				iretmovex = MPI_MoveAbsolute(g_RobotJ1, realx);
+				//iretmovey = MPI_MoveAbsolute(g_RobotJ2, realy);
+				printf("Absolute moving  x to %0.3f cm. - code = %3d ..\n", realx, iretmovex);
+				printf("Absolute moving  y to %0.3f cm. - code = %3d ..\n", realy, iretmovey);
+
+				// CHECK THE MOTOR HAS STOPPED
+				bool is_moving = true;
+				while (is_moving) {
+					Sleep(1000);
+					iretmovex = MPI_IsMoving(g_RobotJ1, &is_moving);
+				}			
+				
 				// set home for motor x
 				MPI_StartHome(g_RobotJ1);
 				// MessageWin("Home process is started", g_RobotJ1);
@@ -810,6 +965,7 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 				// MessageWin("Home process is completed", g_RobotJ1);
 				printf(" Home process is completed for motor x \n");
 
+				/*
 				// set home for motor y
 				MPI_StartHome(g_RobotJ2);
 				// MessageWin("Home process is started", g_RobotJ2);
@@ -818,11 +974,33 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 				MPI_WaitHomeOver(g_RobotJ2, 25000);
 				// MessageWin("Home process is completed", g_RobotJ2);
 				printf(" Home process is completed for motor y \n");
+				*/
 
 				realposition.Format(_T("Closed connection - waiting for new data from client \n"));
 				SetDlgItemText(IDC_EDIT3, realposition);
 				realposition.Format(_T("Reset connection - Moved motors to home position \n"));
 				SetDlgItemText(IDC_EDIT4, realposition);
+
+
+				// destroy axis pointers
+				printf("Destroy axis pointers \n");
+				MPI_DestroyAxis(g_RobotJ1);
+				//MPI_DestroyAxis(g_RobotJ2);
+
+				printf("Disconncting MegaUlink \n");
+				// and close connection to MegaUlink
+				nRetCode = MPI_Disconnect();
+				if (nRetCode == ERR_NO_ERROR) {
+					//MessageWin("Success Communication...");
+					printf("Success Disconnecting ethercat \n");
+					iretx = 0;
+					irety = 0;
+				} else {
+					printf("error disconnecting ethercat \n");
+					//assert(nRetCode == ERR_NO_ERROR);
+					iretx = 1;
+					irety = 1;
+				}
 
 				// reset everything and restart
 				WSACleanup();
@@ -830,7 +1008,7 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 				// and reset all counters and restart
 				icalled = 0;
 				iok = 0;
-				ifirst_connect = 1;
+				ifirst_connect = 0;
 		
 			//} 	
 	
@@ -844,10 +1022,10 @@ void CMFCApplication1Dlg::OnTimer(UINT_PTR nIDEvent)
 			iok = 1;
 			return;
 			
-		}
+		}  //end if iResult
 
 
-	}   //end if iok==0
+	}   
 
 	
 	CDialogEx::OnTimer(nIDEvent);
@@ -866,6 +1044,7 @@ void CMFCApplication1Dlg::OnBnClickedOk()
 	closesocket(ClientSocket);
 	printf("doing cleanup \n");
 	WSACleanup();
+	iResult = -10;
 
 }
 
