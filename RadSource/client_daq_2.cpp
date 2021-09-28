@@ -27,10 +27,19 @@
 #include <cstdlib>  // for _countof
 #include <errno.h>  // for return values
 
-using namespace std;
+//#include <algorithm> 
+#include <chrono> 
+#include <ctime>
+
+using namespace std; 
+//using namespace std::chrono; 
+
 
 int num_crystals_read;
 const int ncrystals = 650;
+int buflen = 0;
+int buflenr = 0;
+
 
 struct ecal {
 	int inumber;
@@ -176,15 +185,22 @@ int main() {
  int portNum = 27015; // port number (same that server)
  int bufsize = 1024; // buffer size
  char buffer[bufsize]; // buffer to transmit
+ // padmelab1
+ //char ip[] = "192.84.130.189";
+ // padmelab2
  char ip[] = "192.84.130.189";
  //char ip[] = "192.168.110.128";
  bool isExit = false; // var fo continue infinitly
  //char address[14]="141.108.45.4";
 
+
+std::chrono::time_point<std::chrono::system_clock> start, end;
+
  // start by reading crystals config
  int ireturn = readconfig();
  printf(" return code from readconfig = %d \n", ireturn);
  printf(" read crystals = %d \n", num_crystals_read);
+
 
  int lastcrystal=0;
  double lastx =0.0;
@@ -297,10 +313,9 @@ int main() {
  */
 
  //int imax= num_crystals_read;
- int imax=10;
+ int imax=50; 
+ //int imax=num_crystals_read;
  int iloop =0;
- int buflen = 0;
- int buflenr = 0;
  // loop to send messages to server
  do {
 
@@ -331,11 +346,12 @@ int main() {
      // wait the response from the server
      printf(" waiting for server to answer.. \n");
    
-     recv(client, buffer, bufsize, 0);
+     recv(client, buffer , bufsize, 0);
      buflenr=strlen(buffer);
+     buffer[buflenr] = '\0';
      
      // check if end of transmission received
-     printf(" received buffer length = %d \n",buflenr);
+     printf(" received buffer length = %d  \n",buflenr);
      printf(" received buffer = %.*s \n",buflenr,buffer);
      int icompare=strcmp(buffer,"#");
      if(icompare==0) {
@@ -344,7 +360,7 @@ int main() {
      }
 
      // wait 5 secs
-     sleep(5);
+     //sleep(5);
      
    }
 
@@ -365,7 +381,7 @@ int main() {
    if(iok>0) {
      // then continue loop
 
-     if(iloop==6) {
+     if(iloop==200) {
        // and reset realx,realy
        double realx= +1.0;
        double realy = +2.0;
@@ -387,13 +403,16 @@ int main() {
        
        
        // sprintf(buffer,"%3d; %8d; %6d; %3d; %3d; %6.2f; %6.2f; %6.2f \n", ij, crystals[ij].inumber, crystals[ij].ipos, crystals[ij].x, crystals[ij].y,crystals[ij].realx, crystals[ij].realy,crystals[ij].hv);
-       sprintf(buffer,"goabs ; %6.2f ; %6.2f \n", crystals[ij].realx, crystals[ij].realy);
+       sprintf(buffer,"goabs ; %6.2f ; %6.2f \n", (float) crystals[ij].x, (float) crystals[ij].y);
        
        //cin >> buffer;
      }
      
+     // Get starting timepoint 
+     start = std::chrono::high_resolution_clock::now(); 
+
      // send to the server
-     int buflen=strlen(buffer);
+     buflen=strlen(buffer);
      printf(" iloop= %d - client buflen = %d - %s \n",iloop,buflen,buffer);
      send(client, buffer, buflen, 0);
 
@@ -402,12 +421,26 @@ int main() {
    
      // wait the response from the server
      printf(" waiting for server to answer.. \n");
-   
-     recv(client, buffer, bufsize, 0);
-     buflenr=strlen(buffer);
-     printf(" received buffer length = %d \n",buflenr);
-     printf(" received buffer = %.*s \n",buflenr,buffer);
 
+     
+     recv(client, buffer, bufsize , 0);
+
+     // Get ending timepoint 
+     end = std::chrono::high_resolution_clock::now(); 
+
+     int buflenr1=strlen(buffer);
+     buffer[buflenr1] = '\0';;
+     printf(" received buffer length = %d  \n",buflenr1);
+     printf(" received buffer = %.*s \n",buflenr1,buffer);
+
+     int elapsed_milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>
+                             (end-start).count();
+
+     double millisec = elapsed_milliseconds/1000.;
+
+     cout << " Time taken from send command to receive answer : " << millisec << " seconds " << endl;
+
+     printf("\n\n");
 
      FILE * pFile;
      // and write last position buffer
@@ -425,7 +458,7 @@ int main() {
    
 
      // wait 5 secs
-     sleep(5);
+     //sleep(5);
    
      // print the server message
      //cout << buffer << endl;
@@ -452,9 +485,10 @@ int main() {
  printf(" waiting for server to answer.. \n");
  
  recv(client, buffer, bufsize, 0);
- buflenr=strlen(buffer);
- printf(" received buffer length = %d \n",buflenr);
- printf(" received buffer = %.*s \n",buflenr,buffer);
+ int buflenr2=strlen(buffer);
+ buffer[buflenr2] = '\0';;
+ printf(" received buffer length = %d \n",buflenr2);
+ printf(" received buffer = %.*s \n",buflenr2,buffer);
  
  
  cout << "\nConnection terminated.\n";
