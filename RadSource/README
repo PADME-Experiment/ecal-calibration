@@ -1,3 +1,11 @@
 This directory contains the code to calibrate ECal using a radioactive source.
 Coordinators for this subdir are Francesco Safai Tehrani <francesco.safaitehrani@roma1.infn.it> and Fabio Ferrarotto <fabio.ferrarotto@roma1.infn.it>
 Windows directory contains source code from windows S/W developed on Visuals Studio
+
+Commands for Windows server program (separator for fields = ";" ; fields are always FLOAT)
+gohome ; 0. ; 0.                       // send motors to home position
+goabs ;  float(ix)  ; float (iy)       //   send motors to cristal (ix,iy)
+gorel ; float(x)  ; float (y)          // displace motors of (x,y) mmm from current position
+whereis ; 0. ; 0.                      //  ask where motors are - returns absolute position in mm (x,y)
+close ; 0. ; 0.                        // close communication and exit program
+
